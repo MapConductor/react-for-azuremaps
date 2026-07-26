@@ -1,0 +1,51 @@
+{
+  "name": "@mapconductor/react-for-azuremaps",
+  "version": "0.1.2",
+  "description": "Azure Maps provider for MapConductor React SDK",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts && npm run postbuild",
+    "postbuild": "node -e \"require('fs').copyFileSync(require.resolve('azure-maps-control/dist/atlas.min.css'), './dist/style.css')\"",
+    "dev": "tsup src/index.ts --format cjs,esm --watch",
+    "clean": "rm -rf dist",
+    "test": "echo 'No tests yet'"
+  },
+  "keywords": [
+    "maps",
+    "azure-maps",
+    "azure",
+    "atlas",
+    "react",
+    "typescript"
+  ],
+  "author": "MapConductor",
+  "license": "Apache2",
+  "peerDependencies": {
+    "@mapconductor/js-sdk-core": "^0.1.1",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@mapconductor/js-sdk-core": "^0.1.1",
+    "@mapconductor/js-sdk-react": "^0.1.1",
+    "azure-maps-control": "^3.7.0"
+  },
+  "devDependencies": {
+    "react": "^19.2.7",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
