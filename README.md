@@ -1,4 +1,4 @@
-English | [日本語](https://github.com/MapConductor/react-for-azuremaps/README.ja.md) | [Español (Latinoamérica)](https://github.com/MapConductor/react-for-azuremaps/README.es-419.md)
+English | [日本語](https://github.com/MapConductor/react-for-azuremaps/blob/main/README.ja.md) | [Español (Latinoamérica)](https://github.com/MapConductor/react-for-azuremaps/blob/main/README.es-419.md)
 
 # @mapconductor/react-for-azuremaps
 
