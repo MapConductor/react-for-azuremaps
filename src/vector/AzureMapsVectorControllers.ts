@@ -3,6 +3,7 @@ import {
   AbstractGroundImageOverlayRenderer,
   AbstractPolygonOverlayRenderer,
   AbstractPolylineOverlayRenderer,
+  circleToRing,
   CircleController,
   CircleManager,
   GroundImageController,
@@ -22,7 +23,7 @@ import {
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from '../AzureMapsMapViewHolder';
-import { addLayersBelowMarkers, pathToPositions, ringToPositions, toPosition } from '../helpers';
+import { addLayersBelowMarkers, closeRingPositions, pathToPositions, polygonRingsToPositions } from '../helpers';
 
 /**
  * A rendered vector overlay on Azure Maps: a DataSource (or none, for image
@@ -43,10 +44,15 @@ export class AzureMapsCircleRenderer extends AbstractCircleOverlayRenderer<Azure
     const map = this.holder.map;
     const source = new atlas.source.DataSource();
     map.sources.add(source);
-    source.add(new atlas.data.Feature(new atlas.data.Point(toPosition(state.center)), {
-      subType: 'Circle',
-      radius: state.radiusMeters,
-    }));
+    // Circle polygon from the shared core geometry (circleToRing), replacing
+    // Azure's subType:'Circle' extension so the shape definition (geodesic vs
+    // planar) is unified across providers. The ring is unwrapped around the
+    // center longitude; Azure accepts out-of-range longitudes, so an
+    // antimeridian-crossing circle stays continuous without splitting.
+    const ring = closeRingPositions(
+      circleToRing(state.center, state.radiusMeters, state.geodesic),
+    );
+    source.add(new atlas.data.Feature(new atlas.data.Polygon([ring])));
     const fill = new atlas.layer.PolygonLayer(source, undefined, { fillColor: state.fillColor, fillOpacity: 1 });
     const stroke = new atlas.layer.LineLayer(source, undefined, { strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
     addLayersBelowMarkers(map, [fill, stroke]);
@@ -130,7 +136,10 @@ export class AzureMapsPolylineController extends PolylineController<VectorHandle
 // ---------- Polygon ----------
 
 function polygonRings(state: PolygonState): [number, number][][] {
-  return [state.points, ...state.holes].map(ring => ringToPositions(ring, state.geodesic));
+  // Core pipeline: densify each ring (geodesic great-circle or straight-in-
+  // lat/lng linear interpolation, matching the Android renderers) and unwrap
+  // the longitudes into the outer ring's world copy.
+  return polygonRingsToPositions(state);
 }
 
 export class AzureMapsPolygonRenderer extends AbstractPolygonOverlayRenderer<AzureMapsMapViewHolder, VectorHandle> {

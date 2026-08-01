@@ -1,4 +1,11 @@
-import { createGeoPoint, createInterpolatePoints, type GeoPoint, type GeoPointInterface } from '@mapconductor/js-sdk-core';
+import {
+  buildUnwrappedPolygonRings,
+  buildUnwrappedPolylinePath,
+  createGeoPoint,
+  type GeoPoint,
+  type GeoPointInterface,
+  type PolygonState,
+} from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 
 /** Azure Maps positions are [longitude, latitude] tuples. */
@@ -45,27 +52,31 @@ export function positionFromEvent(event: { position?: atlas.data.Position }): Ge
  * Mirrors the Leaflet/OpenLayers vector renderers.
  */
 export function pathToPositions(points: readonly GeoPoint[], geodesic: boolean): Position[] {
-  if (points.length === 0) return [];
-  const rendered = geodesic ? createInterpolatePoints([...points]) : points;
-  let previousLongitude: number | null = null;
-  return rendered.map(point => {
-    let longitude = point.normalize().longitude;
-    if (previousLongitude != null) {
-      while (longitude - previousLongitude > 180) longitude -= 360;
-      while (longitude - previousLongitude < -180) longitude += 360;
-    }
-    previousLongitude = longitude;
-    return [longitude, point.latitude];
-  });
+  // Core pipeline for both modes: densification (great-circle when geodesic,
+  // linear lat/lng otherwise — Android's straight-line semantics) + longitude
+  // unwrap.
+  return buildUnwrappedPolylinePath([...points], geodesic).map(toPosition);
 }
 
-function samePoint(a: GeoPoint, b: GeoPoint): boolean {
-  return a.latitude === b.latitude && a.longitude === b.longitude;
+/**
+ * Closed rings ([outer, ...holes]) for a polygon, densified via the shared core
+ * pipeline and unwrapped into the outer ring's world copy.
+ */
+export function polygonRingsToPositions(state: PolygonState): Position[][] {
+  const { outerRings, holeRings } = buildUnwrappedPolygonRings(
+    state.points,
+    state.holes,
+    state.geodesic,
+  );
+  return [...outerRings, ...holeRings].map(closeRingPositions);
 }
 
-/** Closed ring positions for a polygon ring (auto-closes if needed). */
-export function ringToPositions(points: readonly GeoPoint[], geodesic: boolean): Position[] {
-  if (points.length === 0) return [];
-  const closed = samePoint(points[0], points[points.length - 1]) ? points : [...points, points[0]];
-  return pathToPositions(closed, geodesic);
+/** Closed positions for an (open) ring of points. */
+export function closeRingPositions(ring: readonly GeoPoint[]): Position[] {
+  const positions = ring.map(toPosition);
+  if (positions.length === 0) return positions;
+  const first = positions[0];
+  const last = positions[positions.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) positions.push(first);
+  return positions;
 }
