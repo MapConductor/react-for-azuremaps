@@ -1,5 +1,7 @@
 import {
   BaseMapViewController,
+  MapUISettingsDiagnostics,
+  type MapUISettings,
   createGeoRectBounds,
   type CameraOptions,
   type CircleCapable,
@@ -88,6 +90,29 @@ export class AzureMapsViewController
 
   getMap(): atlas.Map {
     return this.map;
+  }
+
+  /**
+   * Azure Maps groups its gestures under `setUserInteraction`. It has no switch
+   * for pitch on its own: `dragRotateInteraction` rotates *and* pitches on a
+   * right-button drag, and a two-finger drag pitches whenever touch input is on
+   * at all, so a tilt block cannot be honoured.
+   */
+  applyUISettings(settings: MapUISettings): void {
+    this.map.setUserInteraction({
+      dragPanInteraction: settings.scrollGesture,
+      scrollZoomInteraction: settings.zoomGesture,
+      dblClickZoomInteraction: settings.zoomGesture,
+      boxZoomInteraction: settings.zoomGesture,
+      dragRotateInteraction: settings.rotateGesture,
+      touchRotate: settings.rotateGesture,
+      keyboardInteraction: settings.scrollGesture || settings.zoomGesture,
+    });
+
+    MapUISettingsDiagnostics.warnIfRequested(
+      settings.tiltGesture, 'tilt', 'AzureMaps',
+      'Azure Maps has no pitch switch of its own, so a two-finger drag can still tilt the map',
+    );
   }
 
   /**
@@ -218,6 +243,9 @@ export class AzureMapsViewController
   fitBounds(bounds: GeoRectBounds, options?: CameraOptions): Promise<boolean> {
     if (!bounds.southWest || !bounds.northEast) return Promise.resolve(false);
     const padding = options?.padding ?? options?.paddings;
+    // Preserve current rotation/tilt so the fit is correct at any bearing/pitch
+    // (setCamera with bounds otherwise frames it north-up, top-down).
+    const cam = this.map.getCamera();
     return new Promise(resolve => {
       this.map.events.addOnce('moveend', () => resolve(true));
       this.map.setCamera({
@@ -227,6 +255,8 @@ export class AzureMapsViewController
           bounds.northEast!.longitude,
           bounds.northEast!.latitude,
         ],
+        bearing: cam.bearing,
+        pitch: cam.pitch,
         ...(padding != null ? { padding } : {}),
         ...(options?.duration ? { type: 'ease', duration: options.duration } : { type: 'jump' }),
       });

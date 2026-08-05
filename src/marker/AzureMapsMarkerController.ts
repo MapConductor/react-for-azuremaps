@@ -98,6 +98,8 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
   // pointer has moved far enough to become a drag (vs a plain click).
   private dragCandidate: MarkerEntity<atlas.Shape> | null = null;
   private dragging = false;
+  /** Pan state before a marker drag, so `uiSettings.scrollGesture` survives it. */
+  private dragPanWasEnabled = true;
 
   /** Wired by AzureMapsViewController to drive the tiled-marker raster overlay. */
   onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null = null;
@@ -183,6 +185,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
       this.dragCandidate = entity;
       this.dragging = false;
       // Suppress map panning while the pointer may be dragging a marker.
+      this.dragPanWasEnabled = this.map.getUserInteraction().dragPanInteraction !== false;
       this.map.setUserInteraction({ dragPanInteraction: false });
     });
     this.map.events.add('mousemove', (e: atlas.MapMouseEvent) => {
@@ -201,7 +204,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
     });
     this.map.events.add('mouseup', () => {
       const entity = this.dragCandidate;
-      this.map.setUserInteraction({ dragPanInteraction: true });
+      this.map.setUserInteraction({ dragPanInteraction: this.dragPanWasEnabled });
       this.dragCandidate = null;
       if (!entity || !this.dragging) return;
       this.dragging = false;
@@ -238,10 +241,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
 
     this.tileRouteId ??= `mc-azure-tile-${generateId()}`;
     const server = LocalTileServer.startServer();
-    const renderer = new MarkerTileRenderer<MarkerState>(tiledStates, {
-      tileSize: 256,
-      iconScaleCallback: this.tilingOptions.iconScaleCallback ?? undefined,
-    });
+    const renderer = new MarkerTileRenderer<MarkerState>(tiledStates, 256, this.tilingOptions.iconScaleCallback ?? undefined);
     this.tileRenderer = renderer;
     this.tileVersion++;
     server.register(this.tileRouteId, renderer);

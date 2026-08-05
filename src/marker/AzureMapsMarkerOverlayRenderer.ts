@@ -64,7 +64,12 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
   atlas.Shape
 > {
   private readonly source: atlas.source.DataSource;
+  // Sprite images are reference-counted by icon id: an image is added to the
+  // map's imageSprite when the first marker uses it and removed when the last
+  // marker using it goes away. Without this, distinct icon URLs accumulate in
+  // the sprite for the map's lifetime (they were never removed on any path).
   private readonly registeredImages = new Set<string>();
+  private readonly iconRefs = new Map<string, number>();
 
   constructor(holder: AzureMapsMapViewHolder) {
     super({ holder });
@@ -167,10 +172,35 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
     }
   }
 
+  /** Increment an icon's ref count and ensure its sprite image is registered. */
+  private async retainImage(bitmapIcon: BitmapIcon): Promise<void> {
+    const id = iconImageId(bitmapIcon.url);
+    this.iconRefs.set(id, (this.iconRefs.get(id) ?? 0) + 1);
+    await this.ensureImage(bitmapIcon);
+  }
+
+  /** Decrement an icon's ref count; remove its sprite image when nothing uses it. */
+  private releaseImage(id: string | undefined): void {
+    if (!id) return;
+    const next = (this.iconRefs.get(id) ?? 1) - 1;
+    if (next > 0) {
+      this.iconRefs.set(id, next);
+      return;
+    }
+    this.iconRefs.delete(id);
+    if (this.registeredImages.delete(id)) {
+      try {
+        this.holder.map.imageSprite.remove(id);
+      } catch {
+        // Image already gone (e.g. map torn down) — nothing to release.
+      }
+    }
+  }
+
   async onAdd(data: AddParams[]): Promise<(atlas.Shape | null)[]> {
     return Promise.all(
       data.map(async ({ state, bitmapIcon }) => {
-        await this.ensureImage(bitmapIcon);
+        await this.retainImage(bitmapIcon);
         const shape = new atlas.Shape(
           new atlas.data.Point(toPosition(state.position)),
           state.id,
@@ -187,7 +217,14 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
       data.map(async ({ current, prev, bitmapIcon }) => {
         const shape = prev.marker;
         if (!shape) return null;
-        await this.ensureImage(bitmapIcon);
+        // Re-count only when the icon actually changes: retain the new image and
+        // release the old one so the sprite drops icons no marker uses anymore.
+        const oldId = shape.getProperties()?.mcImage as string | undefined;
+        const newId = iconImageId(bitmapIcon.url);
+        if (oldId !== newId) {
+          await this.retainImage(bitmapIcon);
+          this.releaseImage(oldId);
+        }
         shape.setCoordinates(toPosition(current.state.position));
         // Preserve current visibility (mcHidden) across property replacement.
         const hidden = shape.getProperties()?.mcHidden === true;
@@ -199,7 +236,10 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
 
   async onRemove(data: MarkerEntity<atlas.Shape>[]): Promise<void> {
     for (const entity of data) {
-      if (entity.marker) this.source.remove(entity.marker);
+      if (!entity.marker) continue;
+      const id = entity.marker.getProperties()?.mcImage as string | undefined;
+      this.source.remove(entity.marker);
+      this.releaseImage(id);
     }
   }
 

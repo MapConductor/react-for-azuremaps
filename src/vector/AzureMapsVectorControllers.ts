@@ -35,6 +35,18 @@ import { addLayersBelowMarkers, closeRingPositions, pathToPositions, polygonRing
  */
 interface VectorHandle {
   cleanup: () => void;
+  // Shape overlays (circle/polyline/polygon) keep their DataSource and layers so
+  // property updates mutate them in place (source.setShapes / layer.setOptions)
+  // instead of removing and re-adding them. Recreating on every update visibly
+  // flickers the shape while a marker is dragged (each drag frame triggers an
+  // update). Absent for overlays that have no such source (e.g. ground images).
+  source?: atlas.source.DataSource;
+  fill?: atlas.layer.PolygonLayer;
+  stroke?: atlas.layer.LineLayer;
+  // Ground images are drawn with an ImageLayer (no DataSource). Kept so a
+  // reposition updates the layer's coordinates in place instead of removing and
+  // re-adding it, which blanks the image for a frame (flicker) on every drag.
+  imageLayer?: atlas.layer.ImageLayer;
 }
 
 // ---------- Circle ----------
@@ -60,6 +72,9 @@ export class AzureMapsCircleRenderer extends AbstractCircleOverlayRenderer<Azure
     // AzureMapsViewController (see its map 'click' handler), not via Azure's
     // per-layer hit-testing, so no layer click handler is attached here.
     return {
+      source,
+      fill,
+      stroke,
       cleanup: () => {
         map.layers.remove([fill, stroke]);
         map.sources.remove(source);
@@ -72,8 +87,20 @@ export class AzureMapsCircleRenderer extends AbstractCircleOverlayRenderer<Azure
     current: CircleEntity<VectorHandle>;
     prev: CircleEntity<VectorHandle>;
   }): Promise<VectorHandle | null> {
-    circle.cleanup();
-    return this.createCircle(current.state);
+    // Update geometry and style in place; recreating would flicker the circle
+    // while its radius handle is dragged.
+    if (!circle.source || !circle.fill || !circle.stroke) {
+      circle.cleanup();
+      return this.createCircle(current.state);
+    }
+    const state = current.state;
+    const ring = closeRingPositions(
+      circleToRing(state.center, state.radiusMeters, state.geodesic),
+    );
+    circle.source.setShapes([new atlas.data.Feature(new atlas.data.Polygon([ring]))]);
+    circle.fill.setOptions({ fillColor: state.fillColor, fillOpacity: 1 });
+    circle.stroke.setOptions({ strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
+    return circle;
   }
 
   async removeCircle(entity: CircleEntity<VectorHandle>): Promise<void> {
@@ -106,6 +133,8 @@ export class AzureMapsPolylineRenderer extends AbstractPolylineOverlayRenderer<A
     // AzureMapsViewController (distance-to-segment), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
     return {
+      source,
+      stroke: line,
       cleanup: () => {
         map.layers.remove(line);
         map.sources.remove(source);
@@ -118,8 +147,18 @@ export class AzureMapsPolylineRenderer extends AbstractPolylineOverlayRenderer<A
     current: PolylineEntity<VectorHandle>;
     prev: PolylineEntity<VectorHandle>;
   }): Promise<VectorHandle | null> {
-    polyline.cleanup();
-    return this.createPolyline(current.state);
+    // Update geometry and style in place; recreating would flicker the line
+    // while a waypoint marker is dragged.
+    if (!polyline.source || !polyline.stroke) {
+      polyline.cleanup();
+      return this.createPolyline(current.state);
+    }
+    const state = current.state;
+    polyline.source.setShapes([
+      new atlas.data.Feature(new atlas.data.LineString(pathToPositions(state.points, state.geodesic))),
+    ]);
+    polyline.stroke.setOptions({ strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
+    return polyline;
   }
 
   async removePolyline(entity: PolylineEntity<VectorHandle>): Promise<void> {
@@ -155,6 +194,9 @@ export class AzureMapsPolygonRenderer extends AbstractPolygonOverlayRenderer<Azu
     // AzureMapsViewController (point-in-polygon), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
     return {
+      source,
+      fill,
+      stroke,
       cleanup: () => {
         map.layers.remove([fill, stroke]);
         map.sources.remove(source);
@@ -167,8 +209,18 @@ export class AzureMapsPolygonRenderer extends AbstractPolygonOverlayRenderer<Azu
     current: PolygonEntity<VectorHandle>;
     prev: PolygonEntity<VectorHandle>;
   }): Promise<VectorHandle | null> {
-    polygon.cleanup();
-    return this.createPolygon(current.state);
+    // Update geometry and style in place; recreating the source and layers
+    // makes the polygon flicker on every drag frame (the reported bug on
+    // /azuremaps/polygon-hole while dragging a vertex marker).
+    if (!polygon.source || !polygon.fill || !polygon.stroke) {
+      polygon.cleanup();
+      return this.createPolygon(current.state);
+    }
+    const state = current.state;
+    polygon.source.setShapes([new atlas.data.Feature(new atlas.data.Polygon(polygonRings(state)))]);
+    polygon.fill.setOptions({ fillColor: state.fillColor, fillOpacity: 1 });
+    polygon.stroke.setOptions({ strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
+    return polygon;
   }
 
   async removePolygon(entity: PolygonEntity<VectorHandle>): Promise<void> {
@@ -185,19 +237,25 @@ export class AzureMapsPolygonController extends PolygonController<VectorHandle> 
 // ---------- GroundImage ----------
 
 export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRenderer<AzureMapsMapViewHolder, VectorHandle> {
-  async createGroundImage(state: GroundImageState): Promise<VectorHandle | null> {
+  // Azure ImageLayer coordinates order: [top-left, top-right, bottom-right, bottom-left].
+  private imageCoordinates(state: GroundImageState): [number, number][] | null {
     const { southWest, northEast } = state.bounds;
     if (!southWest || !northEast) return null;
+    return [
+      [southWest.longitude, northEast.latitude],
+      [northEast.longitude, northEast.latitude],
+      [northEast.longitude, southWest.latitude],
+      [southWest.longitude, southWest.latitude],
+    ];
+  }
+
+  async createGroundImage(state: GroundImageState): Promise<VectorHandle | null> {
+    const coordinates = this.imageCoordinates(state);
+    if (!coordinates) return null;
     const map = this.holder.map;
-    // Azure ImageLayer coordinates order: [top-left, top-right, bottom-right, bottom-left].
     const layer = new atlas.layer.ImageLayer({
       url: state.imageUrl,
-      coordinates: [
-        [southWest.longitude, northEast.latitude],
-        [northEast.longitude, northEast.latitude],
-        [northEast.longitude, southWest.latitude],
-        [southWest.longitude, southWest.latitude],
-      ],
+      coordinates,
       opacity: state.opacity,
     });
     addLayersBelowMarkers(map, layer);
@@ -205,19 +263,34 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
     // AzureMapsViewController (bounds containment), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
     return {
+      imageLayer: layer,
       cleanup: () => {
         map.layers.remove(layer);
       },
     };
   }
 
-  async updateGroundImageProperties({ groundImage, current }: {
+  async updateGroundImageProperties({ groundImage, current, prev }: {
     groundImage: VectorHandle;
     current: GroundImageEntity<VectorHandle>;
     prev: GroundImageEntity<VectorHandle>;
   }): Promise<VectorHandle | null> {
-    groundImage.cleanup();
-    return this.createGroundImage(current.state);
+    const state = current.state;
+    const coordinates = this.imageCoordinates(state);
+    if (!coordinates || !groundImage.imageLayer) {
+      groundImage.cleanup();
+      return this.createGroundImage(state);
+    }
+    // Reposition/opacity in place; recreating the ImageLayer blanks the image
+    // for a frame, flickering it on every corner-marker drag. Only re-set the
+    // url when it actually changed — passing it re-fetches the image.
+    const urlChanged = prev.state.imageUrl !== state.imageUrl;
+    groundImage.imageLayer.setOptions({
+      ...(urlChanged ? { url: state.imageUrl } : {}),
+      coordinates,
+      opacity: state.opacity,
+    });
+    return groundImage;
   }
 
   async removeGroundImage(entity: GroundImageEntity<VectorHandle>): Promise<void> {
