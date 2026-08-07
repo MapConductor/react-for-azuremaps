@@ -3,7 +3,6 @@ import {
   MapUISettingsDiagnostics,
   type MapUISettings,
   createGeoRectBounds,
-  type CameraOptions,
   type CircleCapable,
   type CircleState,
   type GeoRectBounds,
@@ -27,6 +26,8 @@ import {
   type RasterLayerCapable,
   type RasterLayerState,
   type VisibleRegion,
+  type CameraRestriction,
+  isEmptyCameraRestriction,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from './AzureMapsMapViewHolder';
@@ -230,19 +231,18 @@ export class AzureMapsViewController
     });
   }
 
-  animateCamera(position: MapCameraPosition, options?: CameraOptions): Promise<boolean> {
+  animateCamera(position: MapCameraPosition, durationMillis: number): Promise<boolean> {
     this.logicalTiltHint = position.tilt;
     const cam = toCameraPosition(position);
-    const duration = options?.duration || 500;
+    const duration = durationMillis || 500;
     return new Promise(resolve => {
       this.map.events.addOnce('moveend', () => resolve(true));
       this.map.setCamera({ center: cam.center, zoom: cam.zoom, bearing: cam.bearing, pitch: cam.tilt, type: 'ease', duration });
     });
   }
 
-  fitBounds(bounds: GeoRectBounds, options?: CameraOptions): Promise<boolean> {
+  fitBounds(bounds: GeoRectBounds, padding: number): Promise<boolean> {
     if (!bounds.southWest || !bounds.northEast) return Promise.resolve(false);
-    const padding = options?.padding ?? options?.paddings;
     // Preserve current rotation/tilt so the fit is correct at any bearing/pitch
     // (setCamera with bounds otherwise frames it north-up, top-down).
     const cam = this.map.getCamera();
@@ -257,8 +257,8 @@ export class AzureMapsViewController
         ],
         bearing: cam.bearing,
         pitch: cam.pitch,
-        ...(padding != null ? { padding } : {}),
-        ...(options?.duration ? { type: 'ease', duration: options.duration } : { type: 'jump' }),
+        padding,
+        type: 'jump',
       });
     });
   }
@@ -278,9 +278,6 @@ export class AzureMapsViewController
     return visibleRegion ? result.copy({ visibleRegion }) : result;
   }
 
-  getBounds(): GeoRectBounds | null {
-    return this.getVisibleRegion()?.bounds ?? null;
-  }
 
   private getVisibleRegion(): VisibleRegion | null {
     const canvas = this.map.getCanvas();
@@ -362,7 +359,29 @@ export class AzureMapsViewController
     ]);
   }
 
+  /**
+   * Azure Maps は `setCamera` で範囲制限をランタイム変更できるので直接適用する。
+   * ズームは統一ズーム（Google 準拠）と同一体系。
+   */
+  override setCameraRestriction(restriction: CameraRestriction | null): void {
+    // super は呼ばない。基底クラスに保持させるとカメラ停止時のクランプ補正まで走ってしまう。
+    // ネイティブ API 側で既に制限されているので二重適用になる（android-sdk と同じ振り分け）。
+    const effective = isEmptyCameraRestriction(restriction) ? null : restriction;
+
+    const sw = effective?.bounds?.southWest ?? null;
+    const ne = effective?.bounds?.northEast ?? null;
+    this.map.setCamera({
+      maxBounds:
+        sw != null && ne != null
+          ? [sw.longitude, sw.latitude, ne.longitude, ne.latitude]
+          : undefined,
+      minZoom: effective?.minZoom ?? undefined,
+      maxZoom: effective?.maxZoom ?? undefined,
+    });
+  }
+
   destroy(): void {
+    super.destroy();
     if (this.destroyed) return;
     this.destroyed = true;
     void this.clearOverlays().finally(() => {

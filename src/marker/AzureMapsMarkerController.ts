@@ -231,7 +231,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
     const generation = ++this.tileGeneration;
     const tiledStates = this.markerManager
       .allEntities()
-      .filter(entity => entity.marker === null)
+      .filter(entity => entity.tiling)
       .map(entity => entity.state);
 
     if (tiledStates.length === 0) {

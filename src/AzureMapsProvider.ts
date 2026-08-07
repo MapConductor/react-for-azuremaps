@@ -4,6 +4,7 @@ import {
   type GeoRectBounds,
   type MapConfig,
   type MapViewControllerInterface,
+  withRasterHeaderTransform,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsViewController } from './AzureMapsViewController';
@@ -61,6 +62,9 @@ export class AzureMapsProvider extends MapProvider {
     if (!subscriptionKey) throw new Error('An Azure Maps subscription key is required.');
 
     const initialCamera = config.initCameraPosition ? toCameraPosition(config.initCameraPosition) : null;
+    const rasterTransformRequest = withRasterHeaderTransform<atlas.ResourceType>(
+      config.options?.transformRequest,
+    );
 
     const map = new atlas.Map(container, {
       authOptions: {
@@ -78,6 +82,13 @@ export class AzureMapsProvider extends MapProvider {
       showLogo: true,
       showFeedbackLink: false,
       ...(config.options as object | undefined),
+      // RasterLayer の extraHeaders をタイル要求に載せる唯一の口。
+      //
+      // azure-maps は maplibre-gl と違い、**戻り値が undefined だと落ちる**
+      // （返ってきたオブジェクトの `headers` を無条件に読む）。地図が起動しなくなるので、
+      // 変換しない場合も必ず `{ url }` を返す。型が非 undefined なのは飾りではなかった。
+      transformRequest: (url: string, resourceType: atlas.ResourceType) =>
+        (rasterTransformRequest(url, resourceType) ?? { url }) as atlas.RequestParameters,
     });
     this.map = map;
 

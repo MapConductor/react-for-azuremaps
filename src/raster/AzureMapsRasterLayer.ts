@@ -7,6 +7,7 @@ import {
   type RasterLayerChangeParams,
   type RasterLayerEntity,
   type RasterLayerState,
+  type RasterHeaderSupport,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from '../AzureMapsMapViewHolder';
@@ -75,6 +76,15 @@ export class AzureMapsRasterLayerRenderer {
 }
 
 export class AzureMapsRasterLayerController extends RasterLayerController<atlas.layer.TileLayer> {
+  /**
+   * azure-maps-control の transformRequest（AzureMapsProvider が地図生成時に差している）。
+   *
+   * userAgent はブラウザが上書きを許さないので、どのプロバイダでも web では効かない。
+   */
+  protected override get headerSupport(): RasterHeaderSupport {
+    return { provider: 'Azure Maps', extraHeaders: true };
+  }
+
   constructor(renderer: AzureMapsRasterLayerRenderer) {
     super({ rasterLayerManager: new RasterLayerManager(), renderer });
   }

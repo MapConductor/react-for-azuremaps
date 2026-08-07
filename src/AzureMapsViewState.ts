@@ -76,7 +76,7 @@ export class AzureMapsViewState
     if (!durationMillis || durationMillis === 0) {
       void ctrl.moveCamera(next);
     } else {
-      void ctrl.animateCamera(next, { duration: durationMillis });
+      void ctrl.animateCamera(next, durationMillis);
     }
     this._cameraPosition = next;
     this._cameraPositionChangeListener?.(next);
@@ -87,7 +87,7 @@ export class AzureMapsViewState
   }
 
   override fitBounds(bounds: GeoRectBounds, padding: number = 0): void {
-    void this._controller?.fitBounds(bounds, { padding });
+    void this._controller?.fitBounds(bounds, padding);
   }
 
   setController(ctrl: MapViewControllerInterface | null): void {
