@@ -47,6 +47,9 @@ interface VectorHandle {
   // reposition updates the layer's coordinates in place instead of removing and
   // re-adding it, which blanks the image for a frame (flicker) on every drag.
   imageLayer?: atlas.layer.ImageLayer;
+  // 元の imageUrl。ImageLayer には blob の object URL を渡すため、state の URL と
+  // 直接比べられない。画像が差し替わったかの判定にこれを使う。
+  sourceUrl?: string;
 }
 
 // ---------- Circle ----------
@@ -249,12 +252,34 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
     ];
   }
 
+  /**
+   * 画像を一度だけ取得して blob の object URL にして使い回す。
+   *
+   * Azure の `ImageLayer` は `setOptions({ coordinates })` のたびに内部のイメージソースを
+   * 作り直し、`url` を渡していなくても画像を取り直す。ネットワーク往復のあいだ画像が
+   * 消えるため、隅のマーカーをドラッグすると毎回ちらつく。object URL にしておくと
+   * 取り直しがメモリから即座に解決されるので、空フレームが出ない。
+   *
+   * 取得に失敗したとき（CORS など）は元の URL をそのまま使う ＝ 従来どおりの挙動。
+   */
+  private async toReusableUrl(url: string): Promise<{ url: string; revoke: () => void }> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return { url, revoke: () => {} };
+      const objectUrl = URL.createObjectURL(await response.blob());
+      return { url: objectUrl, revoke: () => URL.revokeObjectURL(objectUrl) };
+    } catch {
+      return { url, revoke: () => {} };
+    }
+  }
+
   async createGroundImage(state: GroundImageState): Promise<VectorHandle | null> {
     const coordinates = this.imageCoordinates(state);
     if (!coordinates) return null;
     const map = this.holder.map;
+    const image = await this.toReusableUrl(state.imageUrl);
     const layer = new atlas.layer.ImageLayer({
-      url: state.imageUrl,
+      url: image.url,
       coordinates,
       opacity: state.opacity,
     });
@@ -264,13 +289,15 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
     // hit-testing, so no layer click handler is attached here.
     return {
       imageLayer: layer,
+      sourceUrl: state.imageUrl,
       cleanup: () => {
         map.layers.remove(layer);
+        image.revoke();
       },
     };
   }
 
-  async updateGroundImageProperties({ groundImage, current, prev }: {
+  async updateGroundImageProperties({ groundImage, current }: {
     groundImage: VectorHandle;
     current: GroundImageEntity<VectorHandle>;
     prev: GroundImageEntity<VectorHandle>;
@@ -284,9 +311,12 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
     // Reposition/opacity in place; recreating the ImageLayer blanks the image
     // for a frame, flickering it on every corner-marker drag. Only re-set the
     // url when it actually changed — passing it re-fetches the image.
-    const urlChanged = prev.state.imageUrl !== state.imageUrl;
+    // 画像そのものが差し替わったときだけ作り直す（object URL を張り替えるため）。
+    if (groundImage.sourceUrl !== state.imageUrl) {
+      groundImage.cleanup();
+      return this.createGroundImage(state);
+    }
     groundImage.imageLayer.setOptions({
-      ...(urlChanged ? { url: state.imageUrl } : {}),
       coordinates,
       opacity: state.opacity,
     });

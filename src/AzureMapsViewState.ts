@@ -112,7 +112,7 @@ export class AzureMapsViewState
   }
 }
 
-export function useAzureMapsViewState(params: AzureMapsViewStateParams = {}): AzureMapsViewState {
+export function useAzureMapsViewState(params: AzureMapsViewStateParams = {}): AzureMapsViewStateInterface {
   const [state] = useState(() => new AzureMapsViewState(params));
   return state;
 }
