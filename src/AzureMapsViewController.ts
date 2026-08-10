@@ -18,6 +18,7 @@ import {
   type VisibleRegion,
   type CameraRestriction,
   isEmptyCameraRestriction,
+  type GeoPoint,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from './AzureMapsMapViewHolder';
@@ -161,48 +162,10 @@ export class AzureMapsViewController
       // Markers are canvas-drawn SymbolLayer features (non-tiled) or a raster
       // overlay (tiled) — neither has a DOM node to receive a click — so hit-test
       // both from the tapped coordinate.
-      const markerEntity = this.markerController.find(point);
-      if (markerEntity?.state.clickable) {
-        this.markerController.dispatchClick(markerEntity.state);
-        return;
-      }
-      const tiled = this.markerController.findTiled(point, this.map.getCamera().zoom ?? 0);
-      if (tiled?.state.clickable) {
-        this.markerController.dispatchClick(tiled.state);
-        return;
-      }
-
-      const circleEntity = this.circleController.find(point);
-      if (circleEntity) {
-        this.circleController.dispatchClick({ state: circleEntity.state, clicked: point });
-        return;
-      }
-
-      const polylineHit = this.polylineController.findWithClosestPoint(point);
-      if (polylineHit) {
-        this.polylineController.dispatchClick({
-          state: polylineHit.entity.state,
-          clicked: polylineHit.closestPoint,
-        });
-        return;
-      }
-
-      const polygonEntity = this.polygonController.find(point);
-      if (polygonEntity) {
-        this.polygonController.dispatchClick({ state: polygonEntity.state, clicked: point });
-        return;
-      }
-
-      // Ground images are large background overlays, so test them last (lowest
-      // priority) and only when interactive — otherwise a purely decorative
-      // overlay would swallow every map-background click inside its bounds.
-      const groundImageEntity = this.groundImageController.find(point);
-      if (groundImageEntity?.state.onClick) {
-        this.groundImageController.dispatchClick({ state: groundImageEntity.state, clicked: point });
-        return;
-      }
-
-      this.notifyMapClick(point);
+      // marker → circle → groundImage → polyline → polygon → map の一本道。
+      // 順序と先勝ちはコアの BaseMapViewController.dispatchTap が持つ。
+      // 移行前はここで circle → polyline → polygon → groundImage の独自順だった。
+      this.dispatchTap(point);
     });
     this.map.events.add('contextmenu', (e: atlas.MapMouseEvent) => {
       const point = positionFromEvent(e);
@@ -367,4 +330,25 @@ export class AzureMapsViewController
       this.map.dispose();
     });
   }
+  /**
+   * マーカーのヒットテストと配送。カスケードの先頭。
+   *
+   * Azure Maps のマーカーは canvas 上の SymbolLayer（非タイル）か
+   * ラスターオーバーレイ（タイル）で、どちらもクリックを受ける DOM 要素を持たない。
+   * よってタップ座標から両方をヒットテストする。
+   */
+  protected override dispatchMarkerTap(point: GeoPoint): boolean {
+    const entity = this.markerController.find(point);
+    if (entity?.state.clickable) {
+      this.markerController.dispatchClick(entity.state);
+      return true;
+    }
+    const tiled = this.markerController.findTiled(point, this.map.getCamera().zoom ?? 0);
+    if (tiled?.state.clickable) {
+      this.markerController.dispatchClick(tiled.state);
+      return true;
+    }
+    return false;
+  }
+
 }

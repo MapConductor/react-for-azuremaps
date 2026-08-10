@@ -303,6 +303,14 @@ declare class AzureMapsViewController extends BaseMapViewController implements M
      */
     setCameraRestriction(restriction: CameraRestriction | null): void;
     destroy(): void;
+    /**
+     * マーカーのヒットテストと配送。カスケードの先頭。
+     *
+     * Azure Maps のマーカーは canvas 上の SymbolLayer（非タイル）か
+     * ラスターオーバーレイ（タイル）で、どちらもクリックを受ける DOM 要素を持たない。
+     * よってタップ座標から両方をヒットテストする。
+     */
+    protected dispatchMarkerTap(point: GeoPoint): boolean;
 }
 
 interface AzureMapsViewStateInterface extends MapViewStateInterface<AzureMapsMapDesignType> {
