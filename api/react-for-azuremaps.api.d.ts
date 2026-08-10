@@ -1,4 +1,4 @@
-import { MapConfig, GeoRectBounds, MarkerTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, OnCircleEventHandler, OnPolylineEventHandler, OnPolygonEventHandler, OnGroundImageEventHandler, CameraRestriction, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, AbstractZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
+import { MapConfig, GeoRectBounds, MarkerTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, OnCircleEventHandler, OnPolylineEventHandler, OnPolygonEventHandler, OnGroundImageEventHandler, CameraRestriction, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import React from 'react';
 
@@ -378,32 +378,19 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
 declare function AzureMapsMapView({ state, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
 
 /**
- * Web port of the Google-aligned zoom/altitude converter for Azure Maps.
+ * 統一ズーム（Google Maps 基準・256px タイル）⇄ 高度の変換。
  *
- * Azure Maps' Web SDK (like Mapbox GL) renders with 512px tiles, so at the same
- * on-screen scale its reported zoom is one level lower than 256px-tile providers
- * such as Google Maps. `getCamera().zoom` therefore satisfies
- * `GoogleZoom ≈ AzureZoom + 1`. This converter carries that offset so a
- * MapConductor (Google-referenced) camera renders at the matching scale on Azure
- * and the reported camera converts back to the Google zoom.
+ * Azure Maps の Web SDK は（Mapbox GL と同じく）512px タイルで描くので、
+ * 同じ見た目の縮尺でも報告されるズームが 1 段低い。つまり
+ * `GoogleZoom ≈ AzureZoom + 1`。
+ * 換算式はコアの {@link WebMercatorZoomAltitudeConverter} にある。
  */
-declare class ZoomAltitudeConverter extends AbstractZoomAltitudeConverter {
+declare class ZoomAltitudeConverter extends WebMercatorZoomAltitudeConverter {
     /** Empirical offset: GoogleZoom ≈ AzureMaps.zoom + 1.0 */
     static readonly AZURE_TO_GOOGLE_ZOOM_OFFSET = 1;
+    constructor(zoom0Altitude?: number);
     static azureZoomToGoogleZoom(azureZoom: number): number;
     static googleZoomToAzureZoom(googleZoom: number): number;
-    private cosLatitudeFactor;
-    private cosTiltFactor;
-    zoomLevelToAltitude({ zoomLevel, latitude, tilt, }: {
-        zoomLevel: number;
-        latitude: number;
-        tilt: number;
-    }): number;
-    altitudeToZoomLevel({ altitude, latitude, tilt, }: {
-        altitude: number;
-        latitude: number;
-        tilt: number;
-    }): number;
 }
 
 /** Azure Maps positions are [longitude, latitude] tuples. */
