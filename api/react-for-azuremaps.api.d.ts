@@ -1,4 +1,4 @@
-import { MapConfig, GeoRectBounds, MarkerTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, OnCircleEventHandler, OnPolylineEventHandler, OnPolygonEventHandler, OnGroundImageEventHandler, CameraRestriction, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
+import { MapConfig, GeoRectBounds, MarkerTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, OnCircleEventHandler, OnPolylineEventHandler, OnPolygonEventHandler, OnGroundImageEventHandler, CameraRestriction, MapViewStateInterface, MapViewState, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import React from 'react';
 
@@ -337,24 +337,11 @@ interface AzureMapsViewStateParams {
     cameraPosition?: MapCameraPosition;
 }
 declare class AzureMapsViewState extends MapViewState<AzureMapsMapDesignType> implements AzureMapsViewStateInterface {
-    readonly id: string;
     readonly subscriptionKey?: string;
-    private _cameraPosition;
     private _mapDesignType;
-    private _controller;
-    private _cameraPositionChangeListener;
     constructor({ id, subscriptionKey, mapDesignType, cameraPosition, }?: AzureMapsViewStateParams);
-    get cameraPosition(): MapCameraPosition;
     get mapDesignType(): AzureMapsMapDesignType;
     set mapDesignType(value: AzureMapsMapDesignType);
-    moveCameraTo(position: GeoPoint, durationMillis?: number): void;
-    moveCameraTo(cameraPosition: MapCameraPosition, durationMillis?: number): void;
-    getMapViewHolder(): MapViewHolder<unknown, unknown> | null;
-    fitBounds(bounds: GeoRectBounds, padding?: number): void;
-    setController(ctrl: MapViewControllerInterface | null): void;
-    updateCameraPosition(camera: MapCameraPosition): void;
-    setCameraPositionChangeListener(listener: ((camera: MapCameraPosition) => void) | null): void;
-    private resolveCameraPosition;
 }
 declare function useAzureMapsViewState(params?: AzureMapsViewStateParams): AzureMapsViewStateInterface;
 
