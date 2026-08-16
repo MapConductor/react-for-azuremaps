@@ -1,6 +1,6 @@
 {
   "name": "@mapconductor/react-for-azuremaps",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Azure Maps provider for MapConductor React SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -33,14 +33,14 @@
     "typescript"
   ],
   "author": "MapConductor",
-  "license": "Apache2",
+  "license": "Apache-2.0",
   "peerDependencies": {
-    "@mapconductor/js-sdk-core": "^0.1.3",
+    "@mapconductor/js-sdk-core": "^0.2.0",
     "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "@mapconductor/js-sdk-core": "^0.1.3",
-    "@mapconductor/js-sdk-react": "^0.1.3",
+    "@mapconductor/js-sdk-core": "^0.2.0",
+    "@mapconductor/js-sdk-react": "^0.2.0",
     "azure-maps-control": "^3.7.0"
   },
   "devDependencies": {
