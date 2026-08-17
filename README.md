@@ -60,8 +60,8 @@ npm install @mapconductor/react-for-azuremaps
 - `@mapconductor/react-for-azuremaps` — components / hooks for Azure Maps
 - `@mapconductor/js-sdk-react` / `@mapconductor/js-sdk-core` are installed
   automatically as dependencies.
-- An Azure Maps subscription key is required. Set it as an environment
-  variable, e.g. `VITE_AZURE_MAPS_SUBSCRIPTION_KEY` in a Vite `.env` file.
+- An Azure Maps subscription key is required. Supply it however your build tool
+  exposes environment values, and keep it out of source control.
 
 ### Step 3: Show the map
 
@@ -78,12 +78,16 @@ import {
 import '@mapconductor/react-for-azuremaps/style.css';
 import { createGeoPoint, createMapCameraPosition } from '@mapconductor/js-sdk-core';
 
+// Your own key. Read it from your environment however your build tool does
+// it, and keep it out of source control.
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });
@@ -139,12 +143,16 @@ import {
 } from '@mapconductor/js-sdk-core';
 import { InfoBubble, Marker } from '@mapconductor/js-sdk-react';
 
+// Your own key. Read it from your environment however your build tool does
+// it, and keep it out of source control.
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });

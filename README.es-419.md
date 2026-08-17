@@ -46,7 +46,7 @@ npm install @mapconductor/react-for-azuremaps
 - `@mapconductor/react-for-azuremaps` — componentes / hooks para Azure Maps
 - `@mapconductor/js-sdk-react` / `@mapconductor/js-sdk-core` se instalan
   automáticamente como dependencias.
-- Se requiere una clave de suscripción de Azure Maps. Configúrala como una variable de entorno, por ejemplo `VITE_AZURE_MAPS_SUBSCRIPTION_KEY` en un archivo `.env` de Vite.
+- Se requiere una clave de suscripción de Azure Maps. Pásala con el mecanismo de variables de entorno de tu herramienta de compilación y mantenla fuera del control de versiones.
 
 ### Paso 3: Muestra el mapa
 
@@ -61,12 +61,16 @@ import {
 import '@mapconductor/react-for-azuremaps/style.css';
 import { createGeoPoint, createMapCameraPosition } from '@mapconductor/js-sdk-core';
 
+// Tu propia clave. Léela del entorno con el mecanismo de tu herramienta de
+// compilación y mantenla fuera del control de versiones.
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });
@@ -119,12 +123,16 @@ import {
 } from '@mapconductor/js-sdk-core';
 import { InfoBubble, Marker } from '@mapconductor/js-sdk-react';
 
+// Tu propia clave. Léela del entorno con el mecanismo de tu herramienta de
+// compilación y mantenla fuera del control de versiones.
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });

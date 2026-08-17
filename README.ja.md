@@ -45,7 +45,7 @@ npm install @mapconductor/react-for-azuremaps
 
 - `@mapconductor/react-for-azuremaps` — Azure Maps 用のコンポーネント/フック
 - `@mapconductor/js-sdk-react` / `@mapconductor/js-sdk-core` は依存関係として自動的にインストールされます。
-- Azure Maps のサブスクリプションキーが必要です。Vite の `.env` ファイルなどに環境変数(例: `VITE_AZURE_MAPS_SUBSCRIPTION_KEY`)として設定してください。
+- Azure Maps のサブスクリプションキーが必要です。使っているビルドツールの環境変数の仕組みで渡し、ソース管理には入れないでください。
 
 ### ステップ 3: 地図を表示する
 
@@ -60,12 +60,16 @@ import {
 import '@mapconductor/react-for-azuremaps/style.css';
 import { createGeoPoint, createMapCameraPosition } from '@mapconductor/js-sdk-core';
 
+// 自分のキー。実値はソース管理に入れず、使っているビルドツールのやり方で
+// 環境から読み込んでください。
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });
@@ -118,12 +122,16 @@ import {
 } from '@mapconductor/js-sdk-core';
 import { InfoBubble, Marker } from '@mapconductor/js-sdk-react';
 
+// 自分のキー。実値はソース管理に入れず、使っているビルドツールのやり方で
+// 環境から読み込んでください。
+const AZURE_MAPS_SUBSCRIPTION_KEY = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useAzureMapsViewState({
-    subscriptionKey: import.meta.env.VITE_AZURE_MAPS_SUBSCRIPTION_KEY,
+    subscriptionKey: AZURE_MAPS_SUBSCRIPTION_KEY,
     mapDesignType: AzureMapsDesign.Road,
     cameraPosition: INITIAL_CAMERA,
   });
