@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@mapconductor/js-sdk-core": "^0.2.0",
-    "@mapconductor/js-sdk-react": "^0.2.0",
+    "@mapconductor/js-sdk-react": "^0.2.1",
     "azure-maps-control": "^3.7.4"
   },
   "devDependencies": {
