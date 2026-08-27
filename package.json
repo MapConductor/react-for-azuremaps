@@ -1,6 +1,6 @@
 {
   "name": "@mapconductor/react-for-azuremaps",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Azure Maps provider for MapConductor React SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
