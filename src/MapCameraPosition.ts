@@ -1,4 +1,4 @@
-import { createGeoPoint, createMapCameraPosition, computeOffset, type MapCameraPosition } from '@mapconductor/js-sdk-core';
+import { createGeoPoint, createMapCameraPosition, computeOffset, type MapCameraPosition, toNativeHeading, bearingFromNativeHeading, } from '@mapconductor/js-sdk-core';
 import type * as atlas from 'azure-maps-control';
 import type { Position } from './helpers';
 import { ZoomAltitudeConverter } from './zoom/ZoomAltitudeConverter';
@@ -38,7 +38,7 @@ export function toCameraPosition(pos: MapCameraPosition): AzureCameraParams {
       // programmatic targets the way Google does. Reported zoom
       // (toMapCameraPosition) stays fractional and faithful.
       zoom: ZoomAltitudeConverter.googleZoomToAzureZoom(snapZoomToGoogle(pos.zoom)),
-      bearing: pos.bearing,
+      bearing: toNativeHeading(pos.bearing),
       tilt: pos.tilt,
     };
   }
@@ -57,14 +57,14 @@ export function toCameraPosition(pos: MapCameraPosition): AzureCameraParams {
   const target = computeOffset({
     origin: pos.position,
     distance: distanceForward,
-    heading: pos.bearing,
+    heading: toNativeHeading(pos.bearing),
   });
   const adjustedZoom = pos.zoom + NEGATIVE_TILT_ZOOM_OFFSET_AT_MAX_TILT * (tiltAbsDeg / 60);
 
   return {
     center: [target.longitude, target.latitude],
     zoom: ZoomAltitudeConverter.googleZoomToAzureZoom(adjustedZoom),
-    bearing: pos.bearing,
+    bearing: toNativeHeading(pos.bearing),
     tilt: tiltAbsDeg,
   };
 }
@@ -109,14 +109,14 @@ export function toMapCameraPosition({
     return createMapCameraPosition({
       position: originalPosition,
       zoom: originalGoogleZoom,
-      bearing,
+      bearing: bearingFromNativeHeading(bearing),
       tilt: -pitchAbsDeg,
     });
   }
   return createMapCameraPosition({
     position: createGeoPoint({ latitude: lat, longitude: lng }),
     zoom: ZoomAltitudeConverter.azureZoomToGoogleZoom(zoom),
-    bearing,
+    bearing: bearingFromNativeHeading(bearing),
     tilt,
   });
 }
