@@ -25,6 +25,7 @@ import {
   type OverlayCollector,
   type MapViewControllerInterface,
   mapViewStateInternal,
+  markerIconExtentPx,
 } from '@mapconductor/js-sdk-core';
 import { AzureMapsProvider, type AzureMapsConfig } from './AzureMapsProvider';
 import type { AzureMapsViewStateInterface } from './AzureMapsViewState';
@@ -294,12 +295,12 @@ export function AzureMapsMapView({
               const screenOffset = holder.toScreenOffset(pos);
               if (!screenOffset) return null;
               const icon = entry.icon;
-              const iconPixelSize = icon ? icon.iconSize * icon.scale : 0;
+              const iconPixelSize = markerIconExtentPx(icon);
               return (
                 <InfoBubbleOverlay
                   key={entry.id}
                   positionOffset={screenOffset}
-                  iconSize={{ width: iconPixelSize, height: iconPixelSize }}
+                  iconSize={iconPixelSize}
                   iconOffset={icon ? icon.anchor : { x: 0.5, y: 0.5 }}
                   infoAnchorOffset={icon ? icon.infoAnchor : { x: 0.5, y: 0.5 }}
                   tailOffset={entry.tailOffset}
