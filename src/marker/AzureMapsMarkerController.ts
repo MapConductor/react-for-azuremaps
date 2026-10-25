@@ -13,6 +13,8 @@ import {
   type MarkerEntity,
   type MarkerState,
   type RasterLayerState,
+  pickMarkerHit,
+  preferMarkerHit,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMarkerOverlayRenderer } from './AzureMapsMarkerOverlayRenderer';
@@ -139,39 +141,36 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
    */
   override find(position: GeoPoint): MarkerEntity<atlas.Shape> | null {
     const [touch] = this.map.positionsToPixels([[position.longitude, position.latitude]]);
-    const tol = Settings.Default.tapTolerance;
-    let onIcon: MarkerEntity<atlas.Shape> | null = null;
-    let onIconY = -Infinity;
-    let near: MarkerEntity<atlas.Shape> | null = null;
-    let nearDistSq = Infinity;
-    for (const entity of this.markerManager.allEntities()) {
-      if (entity.marker == null) continue; // tiled markers are hit-tested via findTiled
-      const [mp] = this.map.positionsToPixels([[
-        entity.state.position.longitude,
-        entity.state.position.latitude,
-      ]]);
-      const icon = entity.state.icon?.toBitmapIcon() ?? createDefaultIcon().toBitmapIcon();
-      const dx = touch[0] - mp[0];
-      const dy = touch[1] - mp[1];
-      const left = -icon.anchor.x * icon.size.width;
-      const right = (1 - icon.anchor.x) * icon.size.width;
-      const top = -icon.anchor.y * icon.size.height;
-      const bottom = (1 - icon.anchor.y) * icon.size.height;
-      if (dx >= left && dx <= right && dy >= top && dy <= bottom) {
-        if (mp[1] > onIconY) {
-          onIconY = mp[1];
-          onIcon = entity;
-        }
-      } else if (dx >= left - tol && dx <= right + tol && dy >= top - tol && dy <= bottom + tol) {
-        const distSq = dx * dx + dy * dy;
-        if (distSq < nearDistSq) {
-          nearDistSq = distSq;
-          near = entity;
-        }
-      }
-    }
-    return onIcon ?? near;
+    // 選び方はコアの pickMarkerHit（android / iOS の MarkerHitTest.pickIndex）と同じ。指の下に
+    // アイコン（ラベル込み）が描かれているマーカーを、アンカーの近い別のマーカーより優先する。
+    const regular = pickMarkerHit(
+      { x: touch[0], y: touch[1] },
+      this.markerManager.allEntities().filter(entity => entity.marker != null), // tiled markers below
+      entity => {
+        const [mp] = this.map.positionsToPixels([[
+          entity.state.position.longitude,
+          entity.state.position.latitude,
+        ]]);
+        const icon = entity.state.icon?.toBitmapIcon() ?? createDefaultIcon().toBitmapIcon();
+        return {
+          anchorScreen: { x: mp[0], y: mp[1] },
+          width: icon.size.width,
+          height: icon.size.height,
+          anchor: icon.anchor,
+        };
+      },
+      Settings.Default.tapTolerance,
+    );
+    if (regular?.exact) return regular.item;
+    // タイル化マーカーも同じ規則で比べる（指の下に描かれていれば、通常マーカーの近接より勝つ）。
+    const tiledHit = this.tileRenderer?.findHit(position, MARKER_HIT_RADIUS_MOUSE_PX, this.map.getCamera().zoom ?? 0) ?? null;
+    const tiledEntity = tiledHit ? this.markerManager.getEntity(tiledHit.item.id) : null;
+    return preferMarkerHit<MarkerEntity<atlas.Shape>>(
+      regular,
+      tiledHit && tiledEntity ? { ...tiledHit, item: tiledEntity } : null,
+    )?.item ?? null;
   }
+
 
   /**
    * Synthesizes marker drag from map pointer events: SymbolLayer features have no
