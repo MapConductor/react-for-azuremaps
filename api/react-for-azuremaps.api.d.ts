@@ -348,7 +348,7 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
  * Note: You must import the Azure Maps CSS separately:
  * import '@mapconductor/react-for-azuremaps/style.css';
  */
-declare function AzureMapsMapView({ state, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
+declare function AzureMapsMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
 
 /**
  * 統一ズーム（Google Maps 基準・256px タイル）⇄ 高度の変換。
