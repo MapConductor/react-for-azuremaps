@@ -6,13 +6,13 @@ import {
   MarkerTileRenderer,
   MarkerTilingOptions,
   RasterLayerSource,
-  Settings,
   createDefaultIcon,
   createRasterLayerState,
   type GeoPoint,
   type MarkerEntity,
   type MarkerState,
   type RasterLayerState,
+  markerHitShape,
   pickMarkerHit,
   preferMarkerHit,
 } from '@mapconductor/js-sdk-core';
@@ -151,15 +151,15 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
           entity.state.position.longitude,
           entity.state.position.latitude,
         ]]);
+        // The pin as drawn, not its square bitmap (a default pin is ~31 px
+        // wide in a 48 px square).
         const icon = entity.state.icon?.toBitmapIcon() ?? createDefaultIcon().toBitmapIcon();
-        return {
-          anchorScreen: { x: mp[0], y: mp[1] },
-          width: icon.size.width,
-          height: icon.size.height,
-          anchor: icon.anchor,
-        };
+        return { anchorScreen: { x: mp[0], y: mp[1] }, ...markerHitShape(icon) };
       },
-      Settings.Default.tapTolerance,
+      // The pointer's slop, as for tiled markers below — none for a mouse.
+      // `Settings.Default.tapTolerance` (48) is a map-wide tap slop and made a
+      // 48 px icon answer clicks 48 px outside it.
+      MARKER_HIT_RADIUS_MOUSE_PX,
     );
     if (regular?.exact) return regular.item;
     // タイル化マーカーも同じ規則で比べる（指の下に描かれていれば、通常マーカーの近接より勝つ）。
