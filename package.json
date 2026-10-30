@@ -22,7 +22,7 @@
     "postbuild": "node -e \"require('fs').copyFileSync(require.resolve('azure-maps-control/dist/atlas.min.css'), './dist/style.css')\"",
     "dev": "tsup src/index.ts --format cjs,esm --watch",
     "clean": "rm -rf dist",
-    "test": "echo 'No tests yet'"
+    "test": "node --test \"test/**/*.test.mjs\""
   },
   "keywords": [
     "maps",
