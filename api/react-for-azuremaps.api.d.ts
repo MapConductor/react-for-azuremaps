@@ -122,6 +122,8 @@ declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.S
     private tileRenderer;
     private tileRouteId;
     private tileVersion;
+    /** Device pixels per CSS pixel the current tiles are drawn at. */
+    private tilePixelRatio;
     private tileGeneration;
     private dragCandidate;
     private dragging;

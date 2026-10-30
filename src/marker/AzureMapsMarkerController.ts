@@ -7,6 +7,7 @@ import {
   MarkerTilingOptions,
   RasterLayerSource,
   createDefaultIcon,
+  tilePixelRatio,
   createRasterLayerState,
   type GeoPoint,
   type MarkerEntity,
@@ -19,8 +20,7 @@ import {
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMarkerOverlayRenderer } from './AzureMapsMarkerOverlayRenderer';
 import { positionFromEvent } from '../helpers';
-
-const TILE_PROTOCOL = 'mc-local-tile';
+import { localTileUrlTemplate, MAPCONDUCTOR_TILE_PROTOCOL, parseLocalTileUrl } from './localTileUrl';
 
 // 1x1 transparent PNG used when a tile has no content or the route is gone.
 const EMPTY_TILE = new Uint8Array([
@@ -38,18 +38,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-function parseLocalTileUrl(urlString: string): { routeId: string; x: number; y: number; z: number } | null {
-  const url = new URL(urlString);
-  const parts = url.pathname.split('/').filter(Boolean);
-  if (parts.length !== 4 && parts.length !== 5) return null;
-  const offset = parts.length === 5 ? 1 : 0;
-  const z = Number(parts[1 + offset]);
-  const x = Number(parts[2 + offset]);
-  const y = Number(parts[3 + offset].replace(/\.png$/, ''));
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
-  return { routeId: url.hostname, x, y, z };
-}
-
 /**
  * Route `mc-local-tile://` tile requests to MapConductor's in-process tile
  * server. Mirrors the Mapbox provider's `mapboxgl.addProtocol` registration —
@@ -58,7 +46,7 @@ function parseLocalTileUrl(urlString: string): { routeId: string; x: number; y: 
  */
 function registerTileProtocol(): void {
   if (tileProtocolRegistered) return;
-  atlas.addProtocol(TILE_PROTOCOL, async (params: { url: string }) => {
+  atlas.addProtocol(MAPCONDUCTOR_TILE_PROTOCOL, async (params: { url: string }) => {
     const parsed = parseLocalTileUrl(params.url);
     if (!parsed) return { data: toArrayBuffer(EMPTY_TILE) };
     // An empty spot comes back as a transparent tile; a render that failed
@@ -68,6 +56,7 @@ function registerTileProtocol(): void {
       x: parsed.x,
       y: parsed.y,
       z: parsed.z,
+      pixelRatio: parsed.pixelRatio,
     });
     return { data: toArrayBuffer(bytes) };
   });
@@ -97,6 +86,8 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
   private tileRenderer: MarkerTileRenderer<MarkerState> | null = null;
   private tileRouteId: string | null = null;
   private tileVersion = 0;
+  /** Device pixels per CSS pixel the current tiles are drawn at. */
+  private tilePixelRatio = 1;
   private tileGeneration = 0;
 
   // Synthesized-drag state: the marker pressed with the pointer, and whether the
@@ -243,14 +234,30 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
 
     this.tileRouteId ??= `mc-azure-tile-${generateId()}`;
     const server = LocalTileServer.startServer();
-    const renderer = new MarkerTileRenderer<MarkerState>(tiledStates, 256, this.tilingOptions.iconScaleCallback ?? undefined);
+    // Tiles are laid out as 256 CSS pixels; drawing them at the display's ratio
+    // keeps pins and labels sharp instead of stretching a 1x image.
+    this.tilePixelRatio = tilePixelRatio();
+    const renderer = new MarkerTileRenderer<MarkerState>(
+      tiledStates,
+      256,
+      this.tilingOptions.iconScaleCallback ?? undefined,
+      1.0,
+      false,
+      this.tilingOptions.declutterPx,
+      this.tilePixelRatio,
+    );
     this.tileRenderer = renderer;
     this.tileVersion++;
     server.register(this.tileRouteId, renderer);
 
     registerTileProtocol();
     await renderer.preloadIcons();
-    const template = `${TILE_PROTOCOL}://${this.tileRouteId}/256/${this.tileVersion}/{z}/{x}/{y}.png`;
+    const template = localTileUrlTemplate({
+      routeId: this.tileRouteId,
+      tileSize: 256,
+      cacheKey: String(this.tileVersion),
+      pixelRatio: this.tilePixelRatio,
+    });
 
     // A newer sync (or clear()/destroy()) ran while we awaited icon preloading;
     // applying this stale result would resurrect a removed overlay or clobber a
