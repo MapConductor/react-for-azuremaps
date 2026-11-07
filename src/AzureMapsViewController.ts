@@ -89,9 +89,12 @@ export class AzureMapsViewController
       if (template) await this.rasterLayerController.upsert(polygonTileRasterLayerState(template, tileSize));
       else await this.rasterLayerController.removeById(POLYGON_TILE_LAYER_ID);
     };
-    this.markerController.onRasterLayerUpdate = async state => {
-      if (state) await this.rasterLayerController.composition([state]);
-      else await this.rasterLayerController.clear();
+    // upsert / removeById, not composition / clear: those replace every raster
+    // layer, so marker tiles removed the app's RasterLayers and polygon tiles
+    // (and the app's RasterLayers removed the marker tiles).
+    this.markerController.onRasterLayerUpdate = async (state) => {
+      if (state) await this.rasterLayerController.upsert(state);
+      else await this.rasterLayerController.removeById('mc-marker-tiles');
     };
     this.setupEventListeners();
     // The provider only builds the controller after the map's 'ready' event, so
