@@ -1,3 +1,4 @@
+import { PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState } from '@mapconductor/js-sdk-core';
 import {
   buildVisibleRegion,
   BaseMapViewController,
@@ -81,6 +82,13 @@ export class AzureMapsViewController
     this.logicalTiltHint = logicalTiltHint;
     this.holder.setController(this);
     // Tiled markers render into a raster overlay driven by the raster controller.
+    // Many polygons are drawn as tiles by the tile service worker and shown
+    // as one raster layer; taps still resolve against the original shapes.
+    this.polygonController.tiler = new PolygonTiler();
+    this.polygonController.tiler.onTemplate = async (template, tileSize) => {
+      if (template) await this.rasterLayerController.upsert(polygonTileRasterLayerState(template, tileSize));
+      else await this.rasterLayerController.removeById(POLYGON_TILE_LAYER_ID);
+    };
     this.markerController.onRasterLayerUpdate = async state => {
       if (state) await this.rasterLayerController.composition([state]);
       else await this.rasterLayerController.clear();
