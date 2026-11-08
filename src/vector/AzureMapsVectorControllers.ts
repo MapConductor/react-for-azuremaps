@@ -23,7 +23,7 @@ import {
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from '../AzureMapsMapViewHolder';
-import { addLayersBelowMarkers, closeRingPositions, pathToPositions, polygonRingsToPositions } from '../helpers';
+import { addStackedLayers, closeRingPositions, forgetStackedLayers, pathToPositions, polygonRingsToPositions } from '../helpers';
 
 /**
  * A rendered vector overlay on Azure Maps: a DataSource (or none, for image
@@ -70,7 +70,7 @@ export class AzureMapsCircleRenderer extends AbstractCircleOverlayRenderer<Azure
     source.add(new atlas.data.Feature(new atlas.data.Polygon([ring])));
     const fill = new atlas.layer.PolygonLayer(source, undefined, { fillColor: state.fillColor, fillOpacity: 1 });
     const stroke = new atlas.layer.LineLayer(source, undefined, { strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
-    addLayersBelowMarkers(map, [fill, stroke]);
+    addStackedLayers(map, [fill, stroke], 'circle', state.zIndex);
     // Clicks are resolved geometrically from the tapped coordinate in
     // AzureMapsViewController (see its map 'click' handler), not via Azure's
     // per-layer hit-testing, so no layer click handler is attached here.
@@ -80,6 +80,7 @@ export class AzureMapsCircleRenderer extends AbstractCircleOverlayRenderer<Azure
       stroke,
       cleanup: () => {
         map.layers.remove([fill, stroke]);
+        forgetStackedLayers(map, [fill, stroke]);
         map.sources.remove(source);
       },
     };
@@ -131,7 +132,7 @@ export class AzureMapsPolylineRenderer extends AbstractPolylineOverlayRenderer<A
       lineJoin: 'round',
       lineCap: 'round',
     });
-    addLayersBelowMarkers(map, line);
+    addStackedLayers(map, line, 'polyline', state.zIndex);
     // Clicks are resolved geometrically from the tapped coordinate in
     // AzureMapsViewController (distance-to-segment), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
@@ -140,6 +141,7 @@ export class AzureMapsPolylineRenderer extends AbstractPolylineOverlayRenderer<A
       stroke: line,
       cleanup: () => {
         map.layers.remove(line);
+        forgetStackedLayers(map, line);
         map.sources.remove(source);
       },
     };
@@ -192,7 +194,7 @@ export class AzureMapsPolygonRenderer extends AbstractPolygonOverlayRenderer<Azu
     source.add(new atlas.data.Feature(new atlas.data.Polygon(polygonRings(state))));
     const fill = new atlas.layer.PolygonLayer(source, undefined, { fillColor: state.fillColor, fillOpacity: 1 });
     const stroke = new atlas.layer.LineLayer(source, undefined, { strokeColor: state.strokeColor, strokeWidth: state.strokeWidth });
-    addLayersBelowMarkers(map, [fill, stroke]);
+    addStackedLayers(map, [fill, stroke], 'polygon', state.zIndex);
     // Clicks are resolved geometrically from the tapped coordinate in
     // AzureMapsViewController (point-in-polygon), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
@@ -202,6 +204,7 @@ export class AzureMapsPolygonRenderer extends AbstractPolygonOverlayRenderer<Azu
       stroke,
       cleanup: () => {
         map.layers.remove([fill, stroke]);
+        forgetStackedLayers(map, [fill, stroke]);
         map.sources.remove(source);
       },
     };
@@ -283,7 +286,7 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
       coordinates,
       opacity: state.opacity,
     });
-    addLayersBelowMarkers(map, layer);
+    addStackedLayers(map, layer, 'groundImage');
     // Clicks are resolved geometrically from the tapped coordinate in
     // AzureMapsViewController (bounds containment), not via Azure's per-layer
     // hit-testing, so no layer click handler is attached here.
@@ -292,6 +295,7 @@ export class AzureMapsGroundImageRenderer extends AbstractGroundImageOverlayRend
       sourceUrl: state.imageUrl,
       cleanup: () => {
         map.layers.remove(layer);
+        forgetStackedLayers(map, layer);
         image.revoke();
       },
     };
