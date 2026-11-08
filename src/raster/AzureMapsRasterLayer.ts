@@ -1,3 +1,4 @@
+import { addStackedLayers, forgetStackedLayers, rasterStackKind } from '../helpers';
 import {
   RasterLayerController,
   RasterLayerManager,
@@ -60,15 +61,17 @@ export class AzureMapsRasterLayerRenderer {
     const options = tileLayerOptions(state);
     if (!options) return null;
     const layer = new atlas.layer.TileLayer(options);
-    // Insert raster tiles beneath interactive overlays where possible: place it
-    // before the first existing non-base layer so markers/vectors stay on top.
-    this.holder.map.layers.add(layer);
+    // The lowest overlay band: under ground images, shapes and markers. It used to be added on
+    // top of everything, markers included.
+    const kind = rasterStackKind(state.id);
+    addStackedLayers(this.holder.map, layer, kind, kind === 'marker' ? 0 : state.zIndex);
     return layer;
   }
 
   private remove(layer: atlas.layer.TileLayer): void {
     try {
       this.holder.map.layers.remove(layer);
+      forgetStackedLayers(this.holder.map, layer);
     } catch {
       // Layer may already be gone if the map/style was torn down.
     }
