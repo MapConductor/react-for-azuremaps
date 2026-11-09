@@ -112,8 +112,9 @@ declare class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRender
  * into a raster overlay (see {@link MarkerTileRenderer}) served through a custom
  * tile protocol, so tens of thousands of markers stay performant. Because symbols
  * are canvas-drawn (no per-marker DOM node), clicks are resolved from the tapped
- * coordinate via {@link find} and drags are synthesized from map pointer events —
- * mirroring the HERE/Mapbox providers.
+ * coordinate via {@link find}. Drags go through js-sdk-core's
+ * `DefaultMarkerEventController` (see {@link AzureMapsMarkerEventController}),
+ * as on the GL providers: a press that does not pass the drag threshold is a tap.
  */
 declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.Shape> {
     private readonly map;
@@ -125,10 +126,9 @@ declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.S
     /** Device pixels per CSS pixel the current tiles are drawn at. */
     private tilePixelRatio;
     private tileGeneration;
-    private dragCandidate;
-    private dragging;
-    /** Pan state before a marker drag, so `uiSettings.scrollGesture` survives it. */
-    private dragPanWasEnabled;
+    /** The marker held by the pointer, from press to release (`MarkerEventHost`). */
+    private selected;
+    private readonly eventController;
     /** Wired by AzureMapsViewController to drive the tiled-marker raster overlay. */
     onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null;
     constructor(map: atlas.Map, renderer: AzureMapsMarkerOverlayRenderer, tilingOptions?: MarkerTilingOptions);
@@ -141,13 +141,6 @@ declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.S
      * per-marker DOM click that HtmlMarker provided. Mirrors HERE's `find`.
      */
     find(position: GeoPoint): MarkerEntity<atlas.Shape> | null;
-    /**
-     * Synthesizes marker drag from map pointer events: SymbolLayer features have no
-     * DOM node and no native drag, so press a draggable marker to disable map pan
-     * and follow the pointer, promoting to a drag only once it actually moves (so a
-     * press-release with no movement stays a click).
-     */
-    private setupDragHandling;
     protected shouldTile(state: MarkerState, totalCount: number): boolean;
     protected onTiledMarkersChanged(): Promise<void>;
     private syncTiledOverlay;

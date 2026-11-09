@@ -4,6 +4,9 @@ import {
   createGeoPoint,
   type GeoPoint,
   type GeoPointInterface,
+  overlayStackBeforeId,
+  type OverlayKind,
+  type OverlayStackKey,
   type PolygonState,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
@@ -14,19 +17,58 @@ export type Position = [number, number];
 /** Id of the marker `SymbolLayer` (see AzureMapsMarkerOverlayRenderer). */
 export const MARKER_SYMBOL_LAYER_ID = 'mc-marker-symbols-layer';
 
+// Stacking keys of the layers this SDK added, per map, by layer id.
+const stackKeys = new WeakMap<object, Map<string, OverlayStackKey>>();
+const stackSequences = new WeakMap<object, number>();
+
+const MARKER_TILES_STATE_ID = 'mc-marker-tiles';
+
+function stackKeyOf(map: atlas.Map, layerId: string): OverlayStackKey | null {
+  if (layerId === MARKER_SYMBOL_LAYER_ID) return { kind: 'marker', sub: 1 };
+  return stackKeys.get(map)?.get(layerId) ?? null;
+}
+
 /**
- * Add vector-overlay layers just below the marker layer so markers always draw
- * on top of shapes (as DOM HtmlMarkers used to). If the marker layer does not
- * exist yet, the layers are simply added on top.
+ * Adds an overlay's layers at its place in the shared stack (js-sdk-core OVERLAY_STACK_ORDER):
+ * raster < ground image < polygon < circle < polyline < marker, zIndex within the band, and
+ * equal zIndexes in the order they were handed over. The layers of one overlay (fill, stroke)
+ * stay together in the order given.
+ *
+ * Every overlay used to go "just below the marker layer", so the order between kinds was the
+ * order they were added in; rasters went on top of everything, markers included.
  */
-export function addLayersBelowMarkers(
+export function addStackedLayers(
   map: atlas.Map,
   layers: atlas.layer.Layer | atlas.layer.Layer[],
+  kind: OverlayKind,
+  zIndex: number | null | undefined = 0,
 ): void {
-  const hasMarkerLayer = map.layers
+  const list = Array.isArray(layers) ? layers : [layers];
+  let keys = stackKeys.get(map);
+  if (!keys) {
+    keys = new Map();
+    stackKeys.set(map, keys);
+  }
+  const sequence = (stackSequences.get(map) ?? 0) + 1;
+  stackSequences.set(map, sequence);
+  list.forEach((layer, sub) => keys!.set(layer.getId(), { kind, zIndex: zIndex ?? 0, sequence, sub }));
+  const order = map.layers
     .getLayers()
-    .some(layer => typeof layer.getId === 'function' && layer.getId() === MARKER_SYMBOL_LAYER_ID);
-  map.layers.add(layers, hasMarkerLayer ? MARKER_SYMBOL_LAYER_ID : undefined);
+    .map((layer) => (typeof layer.getId === 'function' ? layer.getId() : ''));
+  const beforeId = overlayStackBeforeId(order, (id) => stackKeyOf(map, id), keys.get(list[0].getId())!);
+  map.layers.add(list, beforeId);
+}
+
+/** Marker tiles are mounted as a raster but belong with the markers. */
+export function rasterStackKind(stateId: string): OverlayKind {
+  return stateId === MARKER_TILES_STATE_ID ? 'marker' : 'rasterLayer';
+}
+
+/** Forget the keys of layers that were removed. */
+export function forgetStackedLayers(map: atlas.Map, layers: atlas.layer.Layer | atlas.layer.Layer[]): void {
+  const keys = stackKeys.get(map);
+  if (!keys) return;
+  for (const layer of Array.isArray(layers) ? layers : [layers]) keys.delete(layer.getId());
 }
 
 export function toPosition(point: GeoPointInterface): Position {
