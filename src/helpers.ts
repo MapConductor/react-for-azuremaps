@@ -9,6 +9,7 @@ import {
   type OverlayStackKey,
   type PolygonState,
   POLYGON_TILE_LAYER_ID,
+  POLYLINE_TILE_LAYER_ID,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 
@@ -62,11 +63,12 @@ export function addStackedLayers(
 
 /**
  * Marker tiles are mounted as a raster but belong with the markers; polygon tiles with the
- * polygons.
+ * polygons, polyline tiles with the polylines.
  */
 export function rasterStackKind(stateId: string): OverlayKind {
   if (stateId === MARKER_TILES_STATE_ID) return 'marker';
   if (stateId === POLYGON_TILE_LAYER_ID) return 'polygon';
+  if (stateId === POLYLINE_TILE_LAYER_ID) return 'polyline';
   return 'rasterLayer';
 }
 
