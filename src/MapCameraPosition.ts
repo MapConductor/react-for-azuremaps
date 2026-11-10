@@ -31,7 +31,7 @@ export interface AzureCameraParams {
 export function toCameraPosition(pos: MapCameraPosition): AzureCameraParams {
   if (pos.tilt >= 0) {
     return {
-      center: [pos.center.longitude, pos.center.latitude],
+      center: [pos.position.longitude, pos.position.latitude],
       // Google Maps 2D (the project-wide reference) snaps zoom to the nearest
       // integer; Azure renders the true fractional zoom, leaving the two up to
       // half a level apart at fractional targets (e.g. Oahu 9.5). Quantize
