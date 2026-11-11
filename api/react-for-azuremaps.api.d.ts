@@ -1,4 +1,4 @@
-import { MapConfig, GeoRectBounds, MarkerTilingOptions, PolylineTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CameraRestriction, MapViewStateInterface, MapViewState, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
+import { MapConfig, GeoRectBounds, MarkerTilingOptions, PolylineTilingOptions, CircleTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CameraRestriction, MapViewStateInterface, MapViewState, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import React from 'react';
 
@@ -15,6 +15,11 @@ interface AzureMapsConfig extends MapConfig {
      * The controller's `setPolylineTilingOptions` replaces it later.
      */
     polylineTilingOptions?: PolylineTilingOptions;
+    /**
+     * When to draw circles as raster tiles; {@link CircleTilingOptions.Default} if omitted.
+     * The controller's `setCircleTilingOptions` replaces it later.
+     */
+    circleTilingOptions?: CircleTilingOptions;
 }
 declare class AzureMapsProvider extends MapProvider {
     private map;
@@ -341,6 +346,12 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
      * handed to the map.
      */
     polylineTilingOptions?: PolylineTilingOptions;
+    /**
+     * When to draw circles as raster tiles ({@link CircleTilingOptions.Default} if omitted).
+     * Read when the map is created; a later value applies from the next time the circles are
+     * handed to the map.
+     */
+    circleTilingOptions?: CircleTilingOptions;
     minZoom?: number;
     maxZoom?: number;
     /** Restricts panning so the camera center cannot leave this rectangle. */
@@ -354,7 +365,7 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
  * Note: You must import the Azure Maps CSS separately:
  * import '@mapconductor/react-for-azuremaps/style.css';
  */
-declare function AzureMapsMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, polylineTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
+declare function AzureMapsMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, polylineTilingOptions, circleTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
 
 /**
  * 統一ズーム（Google Maps 基準・256px タイル）⇄ 高度の変換。
