@@ -64,12 +64,12 @@ export class AzureMapsRasterLayerRenderer {
     // The lowest overlay band: under ground images, shapes and markers. It used to be added on
     // top of everything, markers included.
     const kind = rasterStackKind(state.id);
-    // Polygon and polyline tiles go at the bottom of their bands, under the natively drawn ones.
+    // Polygon, circle and polyline tiles go at the bottom of their bands, under the natively drawn ones.
     addStackedLayers(
       this.holder.map,
       layer,
       kind,
-      kind === 'marker' ? 0 : kind === 'polygon' || kind === 'polyline' ? Number.MIN_SAFE_INTEGER : state.zIndex,
+      kind === 'marker' ? 0 : kind === 'polygon' || kind === 'circle' || kind === 'polyline' ? Number.MIN_SAFE_INTEGER : state.zIndex,
     );
     return layer;
   }
