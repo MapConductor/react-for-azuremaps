@@ -2,11 +2,13 @@ import {
   AbstractMarkerOverlayRenderer,
   bounceInterpolation,
   createDefaultIcon,
+  markerDrawOrder,
   type AddParams,
   type BitmapIcon,
   type ChangeParams,
   type GeoPoint,
   type MarkerEntity,
+  type MarkerState,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from '../AzureMapsMapViewHolder';
@@ -41,9 +43,11 @@ function baseOffset(bitmapIcon: BitmapIcon): [number, number] {
   ];
 }
 
-function symbolProperties(state: { id: string }, bitmapIcon: BitmapIcon): Record<string, unknown> {
+function symbolProperties(state: MarkerState, bitmapIcon: BitmapIcon): Record<string, unknown> {
   return {
     mcId: state.id,
+    // Shared marker draw order (zIndex, then south, then west); the layer sorts by it.
+    mcOrder: markerDrawOrder(state.zIndex, state.position),
     mcImage: iconImageId(bitmapIcon.url),
     mcOffset: baseOffset(bitmapIcon),
     mcHidden: false,
@@ -98,6 +102,8 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
           ignorePlacement: true,
         },
         filter: ['!=', ['get', 'mcHidden'], true],
+        // Lower keys are drawn first, so a larger draw order ends up in front.
+        sortKey: ['get', 'mcOrder'],
       }),
     );
   }
@@ -247,6 +253,7 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
 
   setMarkerPosition(entity: MarkerEntity<atlas.Shape>, position: GeoPoint): void {
     entity.marker?.setCoordinates(toPosition(position));
+    entity.marker?.addProperty('mcOrder', markerDrawOrder(entity.state.zIndex, position));
   }
 
   override setMarkerVisible(entity: MarkerEntity<atlas.Shape>, visible: boolean): void {
