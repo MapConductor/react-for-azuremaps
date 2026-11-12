@@ -253,6 +253,9 @@ export class AzureMapsViewController
     // Preserve current rotation/tilt so the fit is correct at any bearing/pitch
     // (setCamera with bounds otherwise frames it north-up, top-down).
     const cam = this.map.getCamera();
+    // A fit frames the bounds in the whole viewport: the paddings of the last
+    // move no longer apply, so the read-back must not shift the fitted center.
+    this.cameraPaddings = null;
     return new Promise(resolve => {
       this.map.events.addOnce('moveend', () => resolve(true));
       this.map.setCamera({
