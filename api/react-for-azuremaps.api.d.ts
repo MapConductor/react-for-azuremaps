@@ -271,6 +271,11 @@ declare class AzureMapsViewController extends BaseMapViewController implements M
     private initialized;
     private destroyed;
     private logicalTiltHint;
+    /**
+     * 最後に動かしたときの `MapCameraPosition.paddings`。Azure Maps の setCamera には
+     * パディングが無いので、カメラの中心をずらして再現し、読み戻しで元に戻す。
+     */
+    private cameraPaddings;
     constructor(holder: AzureMapsMapViewHolder, markerController: AzureMapsMarkerController, circleController: AzureMapsCircleController, polylineController: AzureMapsPolylineController, polygonController: AzureMapsPolygonController, groundImageController: AzureMapsGroundImageController, rasterLayerController: AzureMapsRasterLayerController, logicalTiltHint?: number | null);
     getMap(): atlas.Map;
     /**
@@ -293,6 +298,9 @@ declare class AzureMapsViewController extends BaseMapViewController implements M
     animateCamera(position: MapCameraPosition, durationMillis: number): Promise<boolean>;
     fitBounds(bounds: GeoRectBounds, padding: number): Promise<boolean>;
     getCameraPosition(): MapCameraPosition | null;
+    /** パディングを除いた領域の中央に target が来るよう、送るカメラの中心をずらす。 */
+    private withPaddedCenter;
+    private viewportSize;
     private getVisibleRegion;
     setOnMarkerClickListener(listener: OnMarkerEventHandler | null): void;
     setOnMarkerDragStart(listener: OnMarkerEventHandler | null): void;
