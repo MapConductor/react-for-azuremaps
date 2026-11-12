@@ -2,11 +2,13 @@ import {
   AbstractMarkerOverlayRenderer,
   bounceInterpolation,
   createDefaultIcon,
+  MarkerDrawOrderView,
   type AddParams,
   type BitmapIcon,
   type ChangeParams,
   type GeoPoint,
   type MarkerEntity,
+  type MarkerState,
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMapViewHolder } from '../AzureMapsMapViewHolder';
@@ -41,9 +43,17 @@ function baseOffset(bitmapIcon: BitmapIcon): [number, number] {
   ];
 }
 
-function symbolProperties(state: { id: string }, bitmapIcon: BitmapIcon): Record<string, unknown> {
+function symbolProperties(
+  state: MarkerState,
+  bitmapIcon: BitmapIcon,
+  drawOrder: MarkerDrawOrderView,
+): Record<string, unknown> {
   return {
     mcId: state.id,
+    // Shared marker draw order (zIndex, then lower on the rotated screen, then
+    // further left); the layer sorts by it. mcZIndex lets a rotation re-sort it.
+    mcOrder: drawOrder.order(state.zIndex, state.position),
+    mcZIndex: state.zIndex ?? null,
     mcImage: iconImageId(bitmapIcon.url),
     mcOffset: baseOffset(bitmapIcon),
     mcHidden: false,
@@ -70,6 +80,8 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
   // the sprite for the map's lifetime (they were never removed on any path).
   private readonly registeredImages = new Set<string>();
   private readonly iconRefs = new Map<string, number>();
+  /** @internal */
+  private readonly drawOrder = new MarkerDrawOrderView();
 
   constructor(holder: AzureMapsMapViewHolder) {
     super({ holder });
@@ -98,8 +110,24 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
           ignorePlacement: true,
         },
         filter: ['!=', ['get', 'mcHidden'], true],
+        // Lower keys are drawn first, so a larger draw order ends up in front.
+        sortKey: ['get', 'mcOrder'],
       }),
     );
+    // Rewriting every symbol's sort key is heavy, so the order catches up once
+    // the camera settles rather than following the rotation frame by frame.
+    map.events.add('moveend', () => this.followHeading());
+  }
+
+  /** Re-sorts after the map turns: among equal zIndex, the one lower on screen is in front. @internal */
+  private followHeading(): void {
+    const camera = this.holder.map.getCamera();
+    if (!this.drawOrder.update(camera.bearing, camera.center?.[0])) return;
+    for (const shape of this.source.getShapes()) {
+      const [longitude, latitude] = shape.getCoordinates() as atlas.data.Position;
+      const zIndex = shape.getProperties().mcZIndex as number | null | undefined;
+      shape.addProperty('mcOrder', this.drawOrder.order(zIndex, { latitude, longitude }));
+    }
   }
 
   /**
@@ -204,7 +232,7 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
         const shape = new atlas.Shape(
           new atlas.data.Point(toPosition(state.position)),
           state.id,
-          symbolProperties(state, bitmapIcon),
+          symbolProperties(state, bitmapIcon, this.drawOrder),
         );
         this.source.add(shape);
         return shape;
@@ -228,7 +256,7 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
         shape.setCoordinates(toPosition(current.state.position));
         // Preserve current visibility (mcHidden) across property replacement.
         const hidden = shape.getProperties()?.mcHidden === true;
-        shape.setProperties({ ...symbolProperties(current.state, bitmapIcon), mcHidden: hidden });
+        shape.setProperties({ ...symbolProperties(current.state, bitmapIcon, this.drawOrder), mcHidden: hidden });
         return shape;
       }),
     );
@@ -247,6 +275,7 @@ export class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRendere
 
   setMarkerPosition(entity: MarkerEntity<atlas.Shape>, position: GeoPoint): void {
     entity.marker?.setCoordinates(toPosition(position));
+    entity.marker?.addProperty('mcOrder', this.drawOrder.order(entity.state.zIndex, position));
   }
 
   override setMarkerVisible(entity: MarkerEntity<atlas.Shape>, visible: boolean): void {
