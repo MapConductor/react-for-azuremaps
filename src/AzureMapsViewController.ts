@@ -1,4 +1,4 @@
-import { PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState, POLYLINE_TILE_LAYER_ID, polylineTileRasterLayerState, CIRCLE_TILE_LAYER_ID, circleTileRasterLayerState } from '@mapconductor/js-sdk-core';
+import { cameraFromPaddedCenter, cameraWithPaddedCenter, type MapPaddings, PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState, POLYLINE_TILE_LAYER_ID, polylineTileRasterLayerState, CIRCLE_TILE_LAYER_ID, circleTileRasterLayerState } from '@mapconductor/js-sdk-core';
 import {
   buildVisibleRegion,
   BaseMapViewController,
@@ -35,6 +35,12 @@ import {
 } from './vector/AzureMapsVectorControllers';
 import { AzureMapsRasterLayerController } from './raster/AzureMapsRasterLayer';
 
+/**
+ * Azure Maps のカメラの上下視野角（度）。Azure は内部で MapLibre 系の描画を使い、
+ * 実測で 36.7°（MapLibre の既定 36.87°）。API からは読めないのでここに持つ。
+ */
+const AZURE_VERTICAL_FOV_DEGREES = 36.87;
+
 export class AzureMapsViewController
   extends BaseMapViewController
   implements
@@ -50,6 +56,11 @@ export class AzureMapsViewController
   private initialized = false;
   private destroyed = false;
   private logicalTiltHint: number | null;
+  /**
+   * 最後に動かしたときの `MapCameraPosition.paddings`。Azure Maps の setCamera には
+   * パディングが無いので、カメラの中心をずらして再現し、読み戻しで元に戻す。
+   */
+  private cameraPaddings: MapPaddings | null = null;
 
   constructor(
     readonly holder: AzureMapsMapViewHolder,
@@ -220,7 +231,7 @@ export class AzureMapsViewController
 
   moveCamera(position: MapCameraPosition): Promise<boolean> {
     this.logicalTiltHint = position.tilt;
-    const cam = toCameraPosition(position);
+    const cam = toCameraPosition(this.withPaddedCenter(position));
     return new Promise(resolve => {
       this.map.events.addOnce('moveend', () => resolve(true));
       this.map.setCamera({ center: cam.center, zoom: cam.zoom, bearing: cam.bearing, pitch: cam.tilt, type: 'jump' });
@@ -229,7 +240,7 @@ export class AzureMapsViewController
 
   animateCamera(position: MapCameraPosition, durationMillis: number): Promise<boolean> {
     this.logicalTiltHint = position.tilt;
-    const cam = toCameraPosition(position);
+    const cam = toCameraPosition(this.withPaddedCenter(position));
     const duration = durationMillis || 500;
     return new Promise(resolve => {
       this.map.events.addOnce('moveend', () => resolve(true));
@@ -270,8 +281,22 @@ export class AzureMapsViewController
       tilt: camera.pitch ?? 0,
       logicalTiltHint: this.logicalTiltHint,
     });
+    const padded = cameraFromPaddedCenter(result, this.cameraPaddings, AZURE_VERTICAL_FOV_DEGREES, this.viewportSize());
     const visibleRegion = this.getVisibleRegion();
-    return visibleRegion ? result.copy({ visibleRegion }) : result;
+    return visibleRegion ? padded.copy({ visibleRegion }) : padded;
+  }
+
+  /** パディングを除いた領域の中央に target が来るよう、送るカメラの中心をずらす。 */
+  private withPaddedCenter(position: MapCameraPosition): MapCameraPosition {
+    const paddings = position.paddings ?? this.cameraPaddings;
+    this.cameraPaddings = paddings;
+    // toCameraPosition は zoom を整数に丸めて送るので、ずらす量も丸めた zoom で測る。
+    return cameraWithPaddedCenter(position.copy({ paddings }), AZURE_VERTICAL_FOV_DEGREES, this.viewportSize(), Math.round(position.zoom));
+  }
+
+  private viewportSize(): { width: number; height: number } {
+    const canvas = this.map.getCanvas();
+    return { width: canvas.clientWidth, height: canvas.clientHeight };
   }
 
   private getVisibleRegion(): VisibleRegion | null {
