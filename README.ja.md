@@ -4,6 +4,72 @@
 
 MapConductor React SDK の Azure Maps プロバイダです。[Azure Maps Web SDK](https://www.npmjs.com/package/azure-maps-control)(`atlas`)を MapConductor のプロバイダ非依存な地図 API でラップするため、同じ MapConductor のコンポーネント(マーカー・円・ポリライン・ポリゴン・地表画像・ラスターレイヤー・インフォバブル・カメラ同期)が Azure Maps 上で描画されます。
 
+## デモ
+
+[![Azure Maps の店舗マップのサンプル](https://raw.githubusercontent.com/MapConductor/react-for-azuremaps/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/azuremaps/map/en)
+
+[ライブデモ](https://demo-react.mapconductor.com/azuremaps/map/en)で動かせます。同じ店舗マップがどのプロバイダでも動き、画面上で切り替えられます。店舗を 3 つに絞ったコード:
+
+```tsx
+import { useMemo, useState } from 'react';
+import {
+  createGeoPoint,
+  createMapCameraPosition,
+  createMarkerState,
+  type MarkerState,
+} from '@mapconductor/js-sdk-core';
+import { InfoBubble, Markers } from '@mapconductor/js-sdk-react';
+import { AzureMapsDesign, AzureMapsMapView, useAzureMapsViewState } from '@mapconductor/react-for-azuremaps';
+import '@mapconductor/react-for-azuremaps/style.css';
+
+const STORES = [
+  { id: 'waikiki', name: 'Waikiki', latitude: 21.2793, longitude: -157.8292 },
+  { id: 'kailua', name: 'Kailua', latitude: 21.3972, longitude: -157.7394 },
+  { id: 'haleiwa', name: 'Haleiwa', latitude: 21.5928, longitude: -158.1034 },
+];
+
+const INITIAL_CAMERA = createMapCameraPosition({
+  position: createGeoPoint({ latitude: 21.38, longitude: -157.93 }),
+  zoom: 10,
+});
+
+export default function App() {
+  const mapViewState = useAzureMapsViewState({
+    subscriptionKey: 'YOUR_AZURE_MAPS_SUBSCRIPTION_KEY',
+    mapDesignType: AzureMapsDesign.Road,
+    cameraPosition: INITIAL_CAMERA,
+  });
+  const [selected, setSelected] = useState<MarkerState | null>(null);
+  const markers = useMemo(
+    () =>
+      STORES.map(store =>
+        createMarkerState({
+          id: store.id,
+          position: createGeoPoint({ latitude: store.latitude, longitude: store.longitude }),
+          extra: store,
+          onClick: marker => setSelected(marker),
+        }),
+      ),
+    [],
+  );
+
+  return (
+    <div style={{ width: '100%', height: '100vh' }}>
+      <AzureMapsMapView state={mapViewState} onMapClick={() => setSelected(null)}>
+        <Markers states={markers} />
+        {selected && (
+          <InfoBubble marker={selected}>
+            <strong>{(selected.extra as (typeof STORES)[number]).name}</strong>
+          </InfoBubble>
+        )}
+      </AzureMapsMapView>
+    </div>
+  );
+}
+```
+
+`YOUR_AZURE_MAPS_SUBSCRIPTION_KEY` はご自身のキーに置き換えてください。
+
 ## インストール
 
 ```shell
@@ -18,7 +84,7 @@ npm install @mapconductor/react-for-azuremaps @mapconductor/js-sdk-core @mapcond
 
 Azure Maps Web SDK(`azure-maps-control`)は依存関係として同梱されています。[Azure ポータル](https://portal.azure.com/)で取得した Azure Maps のサブスクリプションキーが必要です。
 
-![](https://raw.githubusercontent.com/mapconductor/react-for-azuremaps/docs/images/hello-map.jpg)
+![](https://raw.githubusercontent.com/MapConductor/react-for-azuremaps/main/docs/images/hello-map.jpg)
 
 ## Hello Map チュートリアル
 

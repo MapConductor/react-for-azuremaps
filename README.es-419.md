@@ -4,6 +4,72 @@
 
 Proveedor de Azure Maps para el SDK de React de [MapConductor](https://github.com/MapConductor). Envuelve el [Azure Maps Web SDK](https://www.npmjs.com/package/azure-maps-control) (`atlas`) detrás de la API de mapas independiente del proveedor de MapConductor, de modo que los mismos componentes de MapConductor (marcadores, círculos, polilíneas, polígonos, imágenes sobre el terreno, capas ráster, burbujas de información, sincronización de cámara) se renderizan en Azure Maps.
 
+## Demostración
+
+[![Ejemplo de mapa de tiendas con Azure Maps](https://raw.githubusercontent.com/MapConductor/react-for-azuremaps/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/azuremaps/map/en)
+
+Ábrelo en la [demo en vivo](https://demo-react.mapconductor.com/azuremaps/map/en): el mismo mapa de tiendas funciona con todos los proveedores y la página cambia entre ellos. El código, reducido a tres tiendas:
+
+```tsx
+import { useMemo, useState } from 'react';
+import {
+  createGeoPoint,
+  createMapCameraPosition,
+  createMarkerState,
+  type MarkerState,
+} from '@mapconductor/js-sdk-core';
+import { InfoBubble, Markers } from '@mapconductor/js-sdk-react';
+import { AzureMapsDesign, AzureMapsMapView, useAzureMapsViewState } from '@mapconductor/react-for-azuremaps';
+import '@mapconductor/react-for-azuremaps/style.css';
+
+const STORES = [
+  { id: 'waikiki', name: 'Waikiki', latitude: 21.2793, longitude: -157.8292 },
+  { id: 'kailua', name: 'Kailua', latitude: 21.3972, longitude: -157.7394 },
+  { id: 'haleiwa', name: 'Haleiwa', latitude: 21.5928, longitude: -158.1034 },
+];
+
+const INITIAL_CAMERA = createMapCameraPosition({
+  position: createGeoPoint({ latitude: 21.38, longitude: -157.93 }),
+  zoom: 10,
+});
+
+export default function App() {
+  const mapViewState = useAzureMapsViewState({
+    subscriptionKey: 'YOUR_AZURE_MAPS_SUBSCRIPTION_KEY',
+    mapDesignType: AzureMapsDesign.Road,
+    cameraPosition: INITIAL_CAMERA,
+  });
+  const [selected, setSelected] = useState<MarkerState | null>(null);
+  const markers = useMemo(
+    () =>
+      STORES.map(store =>
+        createMarkerState({
+          id: store.id,
+          position: createGeoPoint({ latitude: store.latitude, longitude: store.longitude }),
+          extra: store,
+          onClick: marker => setSelected(marker),
+        }),
+      ),
+    [],
+  );
+
+  return (
+    <div style={{ width: '100%', height: '100vh' }}>
+      <AzureMapsMapView state={mapViewState} onMapClick={() => setSelected(null)}>
+        <Markers states={markers} />
+        {selected && (
+          <InfoBubble marker={selected}>
+            <strong>{(selected.extra as (typeof STORES)[number]).name}</strong>
+          </InfoBubble>
+        )}
+      </AzureMapsMapView>
+    </div>
+  );
+}
+```
+
+Reemplaza `YOUR_AZURE_MAPS_SUBSCRIPTION_KEY` con tu propia clave.
+
 ## Instalación
 
 ```shell
@@ -18,7 +84,7 @@ npm install @mapconductor/react-for-azuremaps @mapconductor/js-sdk-core @mapcond
 
 El Azure Maps Web SDK (`azure-maps-control`) viene incluido como dependencia. Necesitas una clave de suscripción de Azure Maps del [portal de Azure](https://portal.azure.com/).
 
-![](https://raw.githubusercontent.com/mapconductor/react-for-azuremaps/docs/images/hello-map.jpg)
+![](https://raw.githubusercontent.com/MapConductor/react-for-azuremaps/main/docs/images/hello-map.jpg)
 
 ## Tutorial Hello Map
 
