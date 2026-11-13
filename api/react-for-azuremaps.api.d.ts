@@ -1,4 +1,4 @@
-import { MapConfig, GeoRectBounds, MarkerTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CameraRestriction, MapViewStateInterface, MapViewState, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
+import { MapConfig, GeoRectBounds, MarkerTilingOptions, PolylineTilingOptions, CircleTilingOptions, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, MapDesignTypeInterface, AttributionRule, AbstractMarkerOverlayRenderer, MarkerEntity, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleController, AbstractCircleOverlayRenderer, PolylineController, AbstractPolylineOverlayRenderer, PolylineState, PolylineEntity, PolygonController, AbstractPolygonOverlayRenderer, PolygonState, PolygonEntity, GroundImageController, AbstractGroundImageOverlayRenderer, GroundImageState, GroundImageEntity, CircleState, CircleEntity, RasterLayerController, RasterHeaderSupport, RasterLayerAddParams, RasterLayerChangeParams, RasterLayerEntity, MapCameraPosition, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CameraRestriction, MapViewStateInterface, MapViewState, MapViewBaseProps, WebMercatorZoomAltitudeConverter } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import React from 'react';
 
@@ -10,6 +10,16 @@ interface AzureMapsConfig extends MapConfig {
     /** Restricts panning so the camera center cannot leave this rectangle. */
     restrictBounds?: GeoRectBounds;
     markerTilingOptions?: MarkerTilingOptions;
+    /**
+     * When to draw polylines as raster tiles; {@link PolylineTilingOptions.Default} if omitted.
+     * The controller's `setPolylineTilingOptions` replaces it later.
+     */
+    polylineTilingOptions?: PolylineTilingOptions;
+    /**
+     * When to draw circles as raster tiles; {@link CircleTilingOptions.Default} if omitted.
+     * The controller's `setCircleTilingOptions` replaces it later.
+     */
+    circleTilingOptions?: CircleTilingOptions;
 }
 declare class AzureMapsProvider extends MapProvider {
     private map;
@@ -112,8 +122,9 @@ declare class AzureMapsMarkerOverlayRenderer extends AbstractMarkerOverlayRender
  * into a raster overlay (see {@link MarkerTileRenderer}) served through a custom
  * tile protocol, so tens of thousands of markers stay performant. Because symbols
  * are canvas-drawn (no per-marker DOM node), clicks are resolved from the tapped
- * coordinate via {@link find} and drags are synthesized from map pointer events —
- * mirroring the HERE/Mapbox providers.
+ * coordinate via {@link find}. Drags go through js-sdk-core's
+ * `DefaultMarkerEventController` (see {@link AzureMapsMarkerEventController}),
+ * as on the GL providers: a press that does not pass the drag threshold is a tap.
  */
 declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.Shape> {
     private readonly map;
@@ -125,10 +136,9 @@ declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.S
     /** Device pixels per CSS pixel the current tiles are drawn at. */
     private tilePixelRatio;
     private tileGeneration;
-    private dragCandidate;
-    private dragging;
-    /** Pan state before a marker drag, so `uiSettings.scrollGesture` survives it. */
-    private dragPanWasEnabled;
+    /** The marker held by the pointer, from press to release (`MarkerEventHost`). */
+    private selected;
+    private readonly eventController;
     /** Wired by AzureMapsViewController to drive the tiled-marker raster overlay. */
     onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null;
     constructor(map: atlas.Map, renderer: AzureMapsMarkerOverlayRenderer, tilingOptions?: MarkerTilingOptions);
@@ -141,13 +151,6 @@ declare class AzureMapsMarkerController extends AbstractMarkerController<atlas.S
      * per-marker DOM click that HtmlMarker provided. Mirrors HERE's `find`.
      */
     find(position: GeoPoint): MarkerEntity<atlas.Shape> | null;
-    /**
-     * Synthesizes marker drag from map pointer events: SymbolLayer features have no
-     * DOM node and no native drag, so press a draggable marker to disable map pan
-     * and follow the pointer, promoting to a drag only once it actually moves (so a
-     * press-release with no movement stays a click).
-     */
-    private setupDragHandling;
     protected shouldTile(state: MarkerState, totalCount: number): boolean;
     protected onTiledMarkersChanged(): Promise<void>;
     private syncTiledOverlay;
@@ -268,6 +271,11 @@ declare class AzureMapsViewController extends BaseMapViewController implements M
     private initialized;
     private destroyed;
     private logicalTiltHint;
+    /**
+     * 最後に動かしたときの `MapCameraPosition.paddings`。Azure Maps の setCamera には
+     * パディングが無いので、カメラの中心をずらして再現し、読み戻しで元に戻す。
+     */
+    private cameraPaddings;
     constructor(holder: AzureMapsMapViewHolder, markerController: AzureMapsMarkerController, circleController: AzureMapsCircleController, polylineController: AzureMapsPolylineController, polygonController: AzureMapsPolygonController, groundImageController: AzureMapsGroundImageController, rasterLayerController: AzureMapsRasterLayerController, logicalTiltHint?: number | null);
     getMap(): atlas.Map;
     /**
@@ -290,6 +298,9 @@ declare class AzureMapsViewController extends BaseMapViewController implements M
     animateCamera(position: MapCameraPosition, durationMillis: number): Promise<boolean>;
     fitBounds(bounds: GeoRectBounds, padding: number): Promise<boolean>;
     getCameraPosition(): MapCameraPosition | null;
+    /** パディングを除いた領域の中央に target が来るよう、送るカメラの中心をずらす。 */
+    private withPaddedCenter;
+    private viewportSize;
     private getVisibleRegion;
     setOnMarkerClickListener(listener: OnMarkerEventHandler | null): void;
     setOnMarkerDragStart(listener: OnMarkerEventHandler | null): void;
@@ -337,6 +348,18 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
     style?: React.CSSProperties;
     containerStyle?: React.CSSProperties;
     markerTilingOptions?: MarkerTilingOptions;
+    /**
+     * When to draw polylines as raster tiles ({@link PolylineTilingOptions.Default} if omitted).
+     * Read when the map is created; a later value applies from the next time the polylines are
+     * handed to the map.
+     */
+    polylineTilingOptions?: PolylineTilingOptions;
+    /**
+     * When to draw circles as raster tiles ({@link CircleTilingOptions.Default} if omitted).
+     * Read when the map is created; a later value applies from the next time the circles are
+     * handed to the map.
+     */
+    circleTilingOptions?: CircleTilingOptions;
     minZoom?: number;
     maxZoom?: number;
     /** Restricts panning so the camera center cannot leave this rectangle. */
@@ -350,7 +373,7 @@ interface AzureMapsMapViewProps extends MapViewBaseProps<AzureMapsViewStateInter
  * Note: You must import the Azure Maps CSS separately:
  * import '@mapconductor/react-for-azuremaps/style.css';
  */
-declare function AzureMapsMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
+declare function AzureMapsMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, polylineTilingOptions, circleTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: AzureMapsMapViewProps): React.JSX.Element;
 
 /**
  * 統一ズーム（Google Maps 基準・256px タイル）⇄ 高度の変換。

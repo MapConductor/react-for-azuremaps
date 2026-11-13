@@ -2,6 +2,7 @@ import {
   AbstractMarkerController,
   LocalTileServer,
   MARKER_HIT_RADIUS_MOUSE_PX,
+  MARKER_HIT_RADIUS_TOUCH_PX,
   MarkerManager,
   MarkerTileRenderer,
   MarkerTilingOptions,
@@ -19,7 +20,7 @@ import {
 } from '@mapconductor/js-sdk-core';
 import * as atlas from 'azure-maps-control';
 import { AzureMapsMarkerOverlayRenderer } from './AzureMapsMarkerOverlayRenderer';
-import { positionFromEvent } from '../helpers';
+import { AzureMapsMarkerEventController } from './AzureMapsMarkerEventController';
 import { localTileUrlTemplate, MAPCONDUCTOR_TILE_PROTOCOL, parseLocalTileUrl } from './localTileUrl';
 
 // 1x1 transparent PNG used when a tile has no content or the route is gone.
@@ -77,8 +78,9 @@ function generateId(): string {
  * into a raster overlay (see {@link MarkerTileRenderer}) served through a custom
  * tile protocol, so tens of thousands of markers stay performant. Because symbols
  * are canvas-drawn (no per-marker DOM node), clicks are resolved from the tapped
- * coordinate via {@link find} and drags are synthesized from map pointer events —
- * mirroring the HERE/Mapbox providers.
+ * coordinate via {@link find}. Drags go through js-sdk-core's
+ * `DefaultMarkerEventController` (see {@link AzureMapsMarkerEventController}),
+ * as on the GL providers: a press that does not pass the drag threshold is a tap.
  */
 export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Shape> {
   declare readonly renderer: AzureMapsMarkerOverlayRenderer;
@@ -90,12 +92,9 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
   private tilePixelRatio = 1;
   private tileGeneration = 0;
 
-  // Synthesized-drag state: the marker pressed with the pointer, and whether the
-  // pointer has moved far enough to become a drag (vs a plain click).
-  private dragCandidate: MarkerEntity<atlas.Shape> | null = null;
-  private dragging = false;
-  /** Pan state before a marker drag, so `uiSettings.scrollGesture` survives it. */
-  private dragPanWasEnabled = true;
+  /** The marker held by the pointer, from press to release (`MarkerEventHost`). */
+  private selected: MarkerEntity<atlas.Shape> | null = null;
+  private readonly eventController: AzureMapsMarkerEventController;
 
   /** Wired by AzureMapsViewController to drive the tiled-marker raster overlay. */
   onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null = null;
@@ -109,7 +108,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
       markerManager: MarkerManager.defaultManager<atlas.Shape>(null, tilingOptions.minMarkerCount),
       renderer,
     });
-    this.setupDragHandling();
+    this.eventController = new AzureMapsMarkerEventController(this, map);
   }
 
   override async update(state: MarkerState): Promise<void> {
@@ -131,6 +130,22 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
    * per-marker DOM click that HtmlMarker provided. Mirrors HERE's `find`.
    */
   override find(position: GeoPoint): MarkerEntity<atlas.Shape> | null {
+    return this.findWithZoom(position, this.map.getCamera().zoom ?? 0, 'mouse');
+  }
+
+  /**
+   * {@link find} with the pointer's slop: none for a mouse,
+   * `MARKER_HIT_RADIUS_TOUCH_PX` for a finger (`MarkerEventHost.findWithZoom`).
+   *
+   * @internal ドライバー実装点。
+   */
+  findWithZoom(
+    position: GeoPoint,
+    zoom: number,
+    pointerType: 'touch' | 'mouse',
+  ): MarkerEntity<atlas.Shape> | null {
+    const tolerance =
+      pointerType === 'touch' ? MARKER_HIT_RADIUS_TOUCH_PX : MARKER_HIT_RADIUS_MOUSE_PX;
     const [touch] = this.map.positionsToPixels([[position.longitude, position.latitude]]);
     // 選び方はコアの pickMarkerHit（android / iOS の MarkerHitTest.pickIndex）と同じ。指の下に
     // アイコン（ラベル込み）が描かれているマーカーを、アンカーの近い別のマーカーより優先する。
@@ -150,11 +165,11 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
       // The pointer's slop, as for tiled markers below — none for a mouse.
       // `Settings.Default.tapTolerance` (48) is a map-wide tap slop and made a
       // 48 px icon answer clicks 48 px outside it.
-      MARKER_HIT_RADIUS_MOUSE_PX,
+      tolerance,
     );
     if (regular?.exact) return regular.item;
     // タイル化マーカーも同じ規則で比べる（指の下に描かれていれば、通常マーカーの近接より勝つ）。
-    const tiledHit = this.tileRenderer?.findHit(position, MARKER_HIT_RADIUS_MOUSE_PX, this.map.getCamera().zoom ?? 0) ?? null;
+    const tiledHit = this.tileRenderer?.findHit(position, tolerance, zoom) ?? null;
     const tiledEntity = tiledHit ? this.markerManager.getEntity(tiledHit.item.id) : null;
     return preferMarkerHit<MarkerEntity<atlas.Shape>>(
       regular,
@@ -163,48 +178,37 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
   }
 
 
+  // ── MarkerEventHost: the marker a press holds until release ──────────────
+
+  /** @internal ドライバー実装点（`MarkerEventHost`）。 */
+  getSelectedMarker(): MarkerEntity<atlas.Shape> | null {
+    return this.selected;
+  }
+
   /**
-   * Synthesizes marker drag from map pointer events: SymbolLayer features have no
-   * DOM node and no native drag, so press a draggable marker to disable map pan
-   * and follow the pointer, promoting to a drag only once it actually moves (so a
-   * press-release with no movement stays a click).
+   * Called on press (the entity) and on release (null). While a marker is held
+   * its shape follows the pointer directly; {@link update} leaves it alone so
+   * the MarkerState emissions of the drag do not fight it, and the release
+   * applies the final state once.
+   *
+   * @internal ドライバー実装点（`MarkerEventHost`）。
    */
-  private setupDragHandling(): void {
-    this.map.events.add('mousedown', (e: atlas.MapMouseEvent) => {
-      const point = positionFromEvent(e);
-      if (!point) return;
-      const entity = this.find(point);
-      if (!entity?.state.draggable) return;
-      this.dragCandidate = entity;
-      this.dragging = false;
-      // Suppress map panning while the pointer may be dragging a marker.
-      this.dragPanWasEnabled = this.map.getUserInteraction().dragPanInteraction !== false;
-      this.map.setUserInteraction({ dragPanInteraction: false });
-    });
-    this.map.events.add('mousemove', (e: atlas.MapMouseEvent) => {
-      const entity = this.dragCandidate;
-      if (!entity) return;
-      const point = positionFromEvent(e);
-      if (!point) return;
-      if (!this.dragging) {
-        this.dragging = true;
-        this.setDraggingState(entity.state, true);
-        this.dispatchDragStart(entity.state);
-      }
-      entity.state.setPosition(point);
-      this.renderer.setMarkerPosition(entity, point);
-      this.dispatchDrag(entity.state);
-    });
-    this.map.events.add('mouseup', () => {
-      const entity = this.dragCandidate;
-      this.map.setUserInteraction({ dragPanInteraction: this.dragPanWasEnabled });
-      this.dragCandidate = null;
-      if (!entity || !this.dragging) return;
-      this.dragging = false;
-      this.setDraggingState(entity.state, false);
-      this.dispatchDragEnd(entity.state);
-      void super.update(entity.state);
-    });
+  setSelectedMarker(entity: MarkerEntity<atlas.Shape> | null): void {
+    const previous = this.selected;
+    if (previous === entity) return;
+    this.selected = entity;
+    if (previous) {
+      this.setDraggingState(previous.state, false);
+      void super.update(previous.state);
+    }
+    if (entity) this.setDraggingState(entity.state, true);
+  }
+
+  /** @internal ドライバー実装点（`MarkerEventHost`）。 */
+  updateSelectedPosition(position: GeoPoint | null): void {
+    const entity = this.selected;
+    if (!entity || position == null) return;
+    this.renderer.setMarkerPosition(entity, position);
   }
 
   protected override shouldTile(state: MarkerState, totalCount: number): boolean {
@@ -285,6 +289,7 @@ export class AzureMapsMarkerController extends AbstractMarkerController<atlas.Sh
   }
 
   override destroy(): void {
+    this.eventController.destroy();
     void this.removeTileOverlay();
     super.destroy();
   }

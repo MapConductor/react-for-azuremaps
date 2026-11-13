@@ -1,6 +1,6 @@
 import {
   MapProvider,
-  MarkerTilingOptions,
+  MarkerTilingOptions, PolylineTiler, PolylineTilingOptions, CircleTiler, CircleTilingOptions,
   type GeoRectBounds,
   type MapConfig,
   type MapViewControllerInterface,
@@ -33,6 +33,16 @@ export interface AzureMapsConfig extends MapConfig {
   /** Restricts panning so the camera center cannot leave this rectangle. */
   restrictBounds?: GeoRectBounds;
   markerTilingOptions?: MarkerTilingOptions;
+  /**
+   * When to draw polylines as raster tiles; {@link PolylineTilingOptions.Default} if omitted.
+   * The controller's `setPolylineTilingOptions` replaces it later.
+   */
+  polylineTilingOptions?: PolylineTilingOptions;
+  /**
+   * When to draw circles as raster tiles; {@link CircleTilingOptions.Default} if omitted.
+   * The controller's `setCircleTilingOptions` replaces it later.
+   */
+  circleTilingOptions?: CircleTilingOptions;
 }
 
 // Sentinel used to silently cancel initialization when destroy() runs before ready.
@@ -106,6 +116,12 @@ export class AzureMapsProvider extends MapProvider {
     const markerController = new AzureMapsMarkerController(map, new AzureMapsMarkerOverlayRenderer(holder), tilingOptions);
     const circleController = new AzureMapsCircleController(new AzureMapsCircleRenderer(holder));
     const polylineController = new AzureMapsPolylineController(new AzureMapsPolylineRenderer(holder));
+    // Many polylines are drawn as tiles by the tile service worker and shown as one raster
+    // layer (the view controller mounts it); taps still resolve against the original paths.
+    polylineController.tiler = new PolylineTiler(config.polylineTilingOptions ?? PolylineTilingOptions.Default);
+    // Many circles are drawn as tiles too, shown as one raster layer at the bottom of the circle
+    // band (the view controller mounts it); taps still resolve against the original circles.
+    circleController.tiler = new CircleTiler(config.circleTilingOptions ?? CircleTilingOptions.Default);
     const polygonController = new AzureMapsPolygonController(new AzureMapsPolygonRenderer(holder));
     const groundImageController = new AzureMapsGroundImageController(new AzureMapsGroundImageRenderer(holder));
     const rasterLayerController = new AzureMapsRasterLayerController(new AzureMapsRasterLayerRenderer(holder));
